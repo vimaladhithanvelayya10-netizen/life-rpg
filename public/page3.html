@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIFE RPG — Build Your Character</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--gold:#ffd777;--sunset:#ef9b45;--text:#fff;--muted:rgba(255,255,255,.78);--glass:rgba(7,11,19,.58);--border:rgba(255,255,255,.22)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)}
+body{min-height:100vh;background:#0a0d14 url('/mountain.png') center/cover fixed no-repeat;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;background:linear-gradient(90deg,rgba(2,6,12,.23),rgba(3,5,10,.13) 45%,rgba(3,5,10,.58)),linear-gradient(180deg,rgba(4,7,12,.10),rgba(4,7,12,.32));pointer-events:none}
+.page{min-height:100vh;position:relative;z-index:1;padding:46px 6vw 70px;display:flex;justify-content:center}.wrap{width:min(980px,100%)}
+.logo-wrap{width:82px;height:82px;border-radius:50%;display:grid;place-items:center;margin:0 auto 20px;background:#fff;border:2px solid rgba(255,255,255,.96);box-shadow:0 12px 30px rgba(0,0,0,.24),0 0 0 7px rgba(255,255,255,.10);overflow:hidden}.logo{width:100%;height:100%;object-fit:cover;display:block}
+.kicker{text-align:center;color:var(--gold);font-size:11px;font-weight:900;letter-spacing:.28em;text-transform:uppercase;margin:0 0 12px;text-shadow:0 2px 10px rgba(0,0,0,.45)}
+h1{font-family:Cinzel,Georgia,serif;text-align:center;font-size:clamp(32px,4vw,50px);line-height:1.05;margin:0;text-shadow:0 4px 18px rgba(0,0,0,.4)}
+.sub{text-align:center;max-width:700px;margin:14px auto 30px;color:var(--muted);font-size:14px;line-height:1.55;text-shadow:0 2px 10px rgba(0,0,0,.36)}
+.card{padding:30px;border-radius:28px;border:1px solid var(--border);background:var(--glass);backdrop-filter:blur(18px) saturate(120%);-webkit-backdrop-filter:blur(18px) saturate(120%);box-shadow:0 28px 75px rgba(0,0,0,.31),inset 0 1px 0 rgba(255,255,255,.10)}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:26px}.section{padding:22px;border:1px solid rgba(255,255,255,.13);border-radius:22px;background:rgba(255,255,255,.045)}.section h2{font-family:Cinzel,Georgia,serif;font-size:24px;margin:0 0 6px}.section p{margin:0 0 18px;color:var(--muted);font-size:12px;line-height:1.5}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}.field{display:grid;gap:8px}.field.full{grid-column:1/-1}.label{font-size:12px;font-weight:800;color:rgba(255,255,255,.93)}.input,.select{height:52px;width:100%;border-radius:14px;border:1px solid rgba(255,255,255,.26);background:rgba(11,16,26,.42);color:#fff;padding:0 14px;outline:0;font-size:14px}.input::placeholder{color:rgba(255,255,255,.55)}.input:focus,.select:focus{border-color:rgba(255,231,165,.85);box-shadow:0 0 0 4px rgba(255,215,119,.10)}.input[readonly]{color:#ffe8b2}
+.gender-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}.gender-option{position:relative}.gender-option input{position:absolute;opacity:0;pointer-events:none}.gender-card{display:flex;align-items:center;justify-content:center;min-height:52px;padding:0 14px;border-radius:14px;border:1px solid rgba(255,255,255,.26);background:rgba(11,16,26,.42);color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:.18s ease}.gender-card:hover{border-color:rgba(255,231,165,.72);background:rgba(255,255,255,.06)}.gender-option input:checked+.gender-card{border-color:rgba(255,215,119,.9);box-shadow:0 0 0 4px rgba(255,215,119,.10);background:linear-gradient(110deg,rgba(255,215,119,.14),rgba(239,155,69,.08));color:#ffe8b2}.photo{display:flex;align-items:center;gap:16px}.avatar{width:88px;height:88px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.24);box-shadow:0 12px 25px rgba(0,0,0,.20)}.file{display:grid;gap:7px}.file small{color:rgba(255,255,255,.58);font-size:11px}
+.preview{margin-top:18px;padding:16px;border-radius:16px;background:linear-gradient(110deg,rgba(255,215,119,.10),rgba(239,155,69,.06));border:1px solid rgba(255,215,119,.16)}.preview-title{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:900}.username{font-family:Cinzel,Georgia,serif;font-size:28px;font-weight:800;margin-top:4px}.formula{font-size:11px;color:rgba(255,255,255,.64);margin-top:2px}
+.actions{display:flex;gap:12px;align-items:center;justify-content:flex-end;margin-top:22px}.primary{height:56px;border:0;border-radius:15px;padding:0 24px;background:linear-gradient(100deg,#ffd98a,#ef9b45);color:#24170d;font-weight:900;cursor:pointer;box-shadow:0 15px 30px rgba(229,132,70,.25);transition:.18s ease}.primary:hover{transform:translateY(-1px);filter:saturate(104%)}.primary:disabled{opacity:.55;cursor:not-allowed;transform:none}.status{min-height:20px;margin-top:12px;font-size:12px}.error{color:#ffd0d0}.success{color:#caffdc}
+.strength{height:6px;border-radius:99px;background:rgba(255,255,255,.10);overflow:hidden}.strength>span{display:block;height:100%;width:0;background:linear-gradient(90deg,#f47a6b,#ffd777,#75e6a1);transition:width .2s}.hint{font-size:10px;color:rgba(255,255,255,.56)}
+@media(max-width:820px){.grid{grid-template-columns:1fr}.fields{grid-template-columns:1fr}.card{padding:20px}.section{padding:18px}.actions{justify-content:stretch}.primary{width:100%}}
+</style>
+</head>
+<body>
+<main class="page"><div class="wrap">
+  <div class="logo-wrap"><img class="logo" src="/logo.png" alt="LIFE RPG"></div>
+  <p class="kicker">YOUR CHARACTER BEGINS HERE</p>
+  <h1>Build your profile.</h1>
+  <p class="sub">Your email is verified. Tell us who you are, choose a profile photo, and create the password you'll use to enter your LIFE RPG world.</p>
+
+  <form class="card" id="profileForm">
+    <div class="grid">
+      <section class="section">
+        <h2>About you</h2>
+        <p>These details help personalize your character and generate your username.</p>
+        <div class="fields">
+          <label class="field full"><span class="label">Name</span><input class="input" id="name" name="name" autocomplete="name" placeholder="Enter your name" required></label>
+          <label class="field"><span class="label">Birth day</span><input class="input" id="birthDay" type="number" min="1" max="31" placeholder="DD" required></label>
+          <label class="field"><span class="label">Birth month</span><select class="select" id="birthMonth" required><option value="">Select month</option><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select></label>
+          <label class="field"><span class="label">Birth year</span><input class="input" id="birthYear" type="number" min="1900" max="2100" placeholder="YYYY" required></label>
+          <label class="field"><span class="label">Age</span><input class="input" id="age" type="number" min="13" max="120" placeholder="Auto-calculated" readonly required></label>
+          <label class="field full"><span class="label">Contact number</span><input class="input" id="contact" type="tel" autocomplete="tel" placeholder="Enter your contact number" required></label>
+          <div class="field full"><span class="label">Gender</span><div class="gender-options" role="radiogroup" aria-label="Gender"><label class="gender-option"><input type="radio" name="gender" value="male" required><span class="gender-card">Male</span></label><label class="gender-option"><input type="radio" name="gender" value="female"><span class="gender-card">Female</span></label></div></div>
+        </div>
+        <div class="preview"><div class="preview-title">Generated username</div><div class="username" id="usernamePreview">—</div><div class="formula">first 4 letters of your name + birth day + birth month</div></div>
+      </section>
+
+      <section class="section">
+        <h2>Secure your account</h2>
+        <p>Create a strong password and add a profile photo for your character.</p>
+        <div class="photo">
+          <img class="avatar" id="photoPreview" src="/logo.png" alt="Profile preview">
+          <div class="file"><label class="label" for="photo">Upload profile photo</label><input id="photo" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG, JPG or WEBP · maximum 5 MB</small></div>
+        </div>
+        <div style="height:18px"></div>
+        <label class="field"><span class="label">Password</span><input class="input" id="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" required></label>
+        <div style="height:7px"></div><div class="strength"><span id="strengthBar"></span></div><div class="hint" id="strengthText">Use 8+ characters with a mix of letters, numbers, and symbols.</div>
+        <div style="height:16px"></div>
+        <label class="field"><span class="label">Confirm password</span><input class="input" id="confirmPassword" type="password" autocomplete="new-password" placeholder="Re-enter your password" required></label>
+        <div id="status" class="status"></div>
+      </section>
+    </div>
+    <div class="actions"><button class="primary" id="createBtn" type="submit">Create my LIFE RPG account ↗</button></div>
+  </form>
+</div></main>
+<script src="/script.js" defer></script>
+</body>
+</html>

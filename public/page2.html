@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIFE RPG — Create Account</title>
+<meta name="description" content="LIFE RPG email verification">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--gold:#ffd777;--gold2:#ef9b45;--text:#fff;--muted:rgba(255,255,255,.78)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)}
+body{min-height:100vh;background:#0a0d14 url('/mountain.png') center/cover fixed no-repeat;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;background:linear-gradient(90deg,rgba(2,6,12,.20),rgba(6,7,12,.22),rgba(5,6,12,.56));pointer-events:none}
+.page{min-height:100vh;position:relative;z-index:1;padding:42px 6vw 70px;display:flex;align-items:center;justify-content:center}.wrap{position:relative;width:min(760px,100%)}
+.logo-wrap{width:94px;height:94px;border-radius:50%;background:rgba(255,255,255,.84);border:2px solid rgba(255,255,255,.92);display:grid;place-items:center;margin:0 auto 20px;box-shadow:0 12px 30px rgba(0,0,0,.25),0 0 0 7px rgba(255,255,255,.10)}.logo{width:74px;height:74px;object-fit:contain}
+.kicker{text-align:center;color:var(--gold);font-size:10px;font-weight:900;letter-spacing:.28em;text-transform:uppercase;margin:0 0 12px;text-shadow:0 2px 10px rgba(0,0,0,.4)}
+h1{font-family:Cinzel,Georgia,serif;text-align:center;font-size:clamp(36px,4.8vw,58px);line-height:1.03;letter-spacing:.01em;margin:0;text-shadow:0 4px 18px rgba(0,0,0,.42)}
+.sub{text-align:center;margin:13px auto 28px;max-width:580px;color:var(--muted);font-size:14px;line-height:1.55;text-shadow:0 2px 10px rgba(0,0,0,.35)}
+.panel{padding:28px;border:1px solid rgba(255,255,255,.22);border-radius:26px;background:rgba(9,13,22,.43);backdrop-filter:blur(17px) saturate(120%);-webkit-backdrop-filter:blur(17px) saturate(120%);box-shadow:0 26px 70px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.10)}
+.row{display:grid;grid-template-columns:1fr auto;gap:10px}.label{display:block;font-size:12px;font-weight:700;color:rgba(255,255,255,.92);margin:0 0 8px}.input{width:100%;height:56px;border-radius:15px;border:1px solid rgba(255,255,255,.30);background:rgba(12,18,29,.45);color:#fff;padding:0 16px;outline:0;font-size:15px;font-weight:500}.input:focus{border-color:rgba(255,231,165,.82);box-shadow:0 0 0 4px rgba(255,215,119,.10)}.input::placeholder{color:rgba(255,255,255,.62)}
+.primary{border:0;border-radius:15px;height:56px;padding:0 24px;background:linear-gradient(100deg,#ffd98a,#ef9b45);color:#24170d;font-weight:900;cursor:pointer;box-shadow:0 14px 28px rgba(229,132,70,.22)}.primary:hover{filter:saturate(105%);transform:translateY(-1px)}.primary:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.status{min-height:23px;margin:13px 0 0;font-size:12px;color:rgba(255,255,255,.92)}.status.error{color:#ffd0d0}.status.success{color:#c9ffde}
+.otp-section{margin-top:24px;padding-top:24px;border-top:1px solid rgba(255,255,255,.15);display:none}.otp-section.visible{display:block}.otp-title{font-family:Cinzel,Georgia,serif;font-size:27px;margin:0 0 6px}.otp-copy{margin:0 0 18px;color:var(--muted);font-size:13px;line-height:1.5}.otp-boxes{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:360px}.otp{width:100%;height:64px;border-radius:15px;border:1px solid rgba(255,255,255,.34);background:rgba(12,18,29,.46);color:#fff;text-align:center;font-size:29px;font-weight:900;outline:0}.otp:focus{border-color:rgba(255,231,165,.82);box-shadow:0 0 0 4px rgba(255,215,119,.10)}.otp-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}.secondary{height:44px;padding:0 18px;border-radius:12px;border:1px solid rgba(255,255,255,.25);background:rgba(18,24,35,.32);color:#fff;font-weight:800;cursor:pointer}.secondary:hover{background:rgba(255,255,255,.08)}
+.dev-code{display:none;margin-top:12px;padding:10px 12px;border-radius:10px;border:1px dashed rgba(255,215,119,.35);background:rgba(255,215,119,.06);color:#ffe6ad;font-size:12px}.dev-code.visible{display:block}.back{text-align:center;margin:20px 0 0;font-size:12px;color:rgba(255,255,255,.8)}.back button{background:none;border:0;color:var(--gold);font-weight:900;cursor:pointer}
+@media(max-width:720px){.page{padding:24px 16px}.panel{padding:20px}.row{grid-template-columns:1fr}.otp-boxes{max-width:none}}
+</style>
+</head>
+<body>
+<main class="page"><div class="wrap">
+  <div class="logo-wrap"><img class="logo" src="/logo.png" alt="LIFE RPG"></div>
+  <p class="kicker">BEGIN YOUR ADVENTURE</p>
+  <h1>Create your account.</h1>
+  <p class="sub">Enter your email address. LIFE RPG will send a 4-digit verification code to that inbox.</p>
+  <section class="panel">
+    <form id="emailForm">
+      <label class="label" for="email">Email address</label>
+      <div class="row"><input class="input" id="email" type="email" autocomplete="email" placeholder="you@example.com" required><button class="primary" id="sendBtn" type="submit">Send code</button></div>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+    </form>
+    <section id="otpSection" class="otp-section" aria-live="polite">
+      <h2 class="otp-title">Enter your code.</h2>
+      <p class="otp-copy">We sent a 4-digit code to <strong id="emailPreview"></strong>. The code expires in 10 minutes.</p>
+      <div class="otp-boxes">
+        <input class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="Digit 1">
+        <input class="otp" inputmode="numeric" maxlength="1" aria-label="Digit 2">
+        <input class="otp" inputmode="numeric" maxlength="1" aria-label="Digit 3">
+        <input class="otp" inputmode="numeric" maxlength="1" aria-label="Digit 4">
+      </div>
+      <div class="otp-actions"><button class="primary" id="verifyBtn" type="button">Verify email</button><button class="secondary" id="resendBtn" type="button">Resend code</button></div>
+    </section>
+    <p class="back"><button id="backBtn" type="button">← Back to login</button></p>
+  </section>
+</div></main>
+<script src="/script.js" defer></script>
+</body>
+</html>

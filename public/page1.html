@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIFE RPG — Enter Your World</title>
+<meta name="description" content="Enter your LIFE RPG world.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --gold:#ffd777;
+  --gold-strong:#f5ab3e;
+  --sunset:#e68454;
+  --ink:#0d111a;
+  --white:#fff;
+  --muted:rgba(255,255,255,.78);
+  --glass:rgba(9,13,22,.42);
+  --glass-border:rgba(255,255,255,.20);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--white)}
+body{min-height:100vh;background:#0a0d14 url('/mountain.png') center center/cover no-repeat fixed;overflow:hidden}
+body::before{content:"";position:fixed;inset:0;background:linear-gradient(90deg,rgba(2,6,12,.18) 0%,rgba(2,6,12,.06) 48%,rgba(3,5,10,.55) 100%),linear-gradient(180deg,rgba(4,7,12,.12),rgba(4,7,12,.25));pointer-events:none}
+.entry{min-height:100vh;position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(390px,520px);gap:5vw;align-items:center;padding:5vh 7vw}
+.entry-copy{position:relative;z-index:1;max-width:560px;align-self:center;margin-left:1vw}
+.brand-title{font-family:Cinzel,Georgia,serif;font-weight:800;font-size:clamp(72px,8.5vw,132px);line-height:.86;letter-spacing:.045em;margin:0;color:#fff;text-shadow:0 10px 30px rgba(0,0,0,.30),0 2px 2px rgba(0,0,0,.22)}
+.tagline{max-width:520px;margin:30px 0 0;font-size:clamp(17px,1.45vw,23px);font-weight:600;line-height:1.6;color:rgba(255,255,255,.93);text-shadow:0 3px 16px rgba(0,0,0,.44)}
+.note{position:fixed;left:7.2vw;bottom:5.4vh;z-index:1;font-size:10px;font-weight:800;letter-spacing:.34em;text-transform:uppercase;color:rgba(255,255,255,.9);text-shadow:0 2px 10px rgba(0,0,0,.42)}
+.entry-side{position:relative;z-index:2;width:100%;max-width:520px;justify-self:end}
+.card{padding:34px 34px 31px;border:1px solid var(--glass-border);border-radius:30px;background:var(--glass);backdrop-filter:blur(18px) saturate(120%);-webkit-backdrop-filter:blur(18px) saturate(120%);box-shadow:0 28px 70px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.10)}
+.logo-wrap{width:112px;height:112px;margin:0 auto 22px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.83);border:2px solid rgba(255,255,255,.86);box-shadow:0 12px 34px rgba(0,0,0,.24),0 0 0 8px rgba(255,255,255,.10);overflow:hidden}
+.logo{width:88px;height:88px;object-fit:contain}
+.kicker{text-align:center;color:var(--gold);font-size:11px;font-weight:900;letter-spacing:.28em;text-transform:uppercase;margin:0 0 13px;text-shadow:0 2px 10px rgba(0,0,0,.4)}
+h1{font-family:Cinzel,Georgia,serif;text-align:center;font-weight:700;font-size:clamp(32px,3.2vw,46px);line-height:1.08;letter-spacing:.01em;margin:0;text-shadow:0 4px 18px rgba(0,0,0,.42)}
+.sub{text-align:center;margin:13px 0 28px;color:rgba(255,255,255,.84);font-size:14px;font-weight:500;line-height:1.55;text-shadow:0 2px 10px rgba(0,0,0,.35)}
+.form{display:grid;gap:15px}.label{display:block;margin:0 0 8px;font-size:12px;font-weight:700;color:rgba(255,255,255,.92);letter-spacing:.01em;text-shadow:0 2px 8px rgba(0,0,0,.28)}
+.input{width:100%;height:58px;padding:0 17px;border-radius:16px;border:1px solid rgba(255,255,255,.30);background:rgba(12,18,29,.44);color:#fff;outline:0;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:inset 0 1px 1px rgba(255,255,255,.06),0 6px 20px rgba(0,0,0,.12);font-size:15px;font-weight:500;transition:.2s ease}
+.input::placeholder{color:rgba(255,255,255,.62)}.input:focus{border-color:rgba(255,229,161,.82);box-shadow:0 0 0 4px rgba(255,215,119,.11),0 8px 24px rgba(0,0,0,.16)}
+.primary{width:100%;height:58px;border:0;border-radius:16px;margin-top:2px;background:linear-gradient(100deg,#ffd98a 0%,#ef9b45 100%);color:#22170d;font-weight:900;letter-spacing:.01em;display:flex;align-items:center;justify-content:center;gap:11px;box-shadow:0 15px 30px rgba(229,132,70,.25),inset 0 1px 0 rgba(255,255,255,.28);cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,filter .18s ease}
+.primary:hover{transform:translateY(-1px);filter:saturate(105%);box-shadow:0 19px 36px rgba(229,132,70,.34),inset 0 1px 0 rgba(255,255,255,.32)}.primary:active{transform:translateY(0)}.primary span{font-size:21px;line-height:1}
+.create{text-align:center;margin:24px 0 0;font-size:12px;color:rgba(255,255,255,.82);text-shadow:0 2px 10px rgba(0,0,0,.34)}.link{background:none;border:0;color:var(--gold);font-weight:900;padding:0;cursor:pointer}.link:hover{text-decoration:underline;text-underline-offset:3px}
+.transition{position:fixed;inset:0;background:rgba(4,7,12,0);pointer-events:none;transition:background .35s ease;z-index:20}.transition.active{background:rgba(4,7,12,.90)}
+@media(max-width:980px){body{overflow:auto;background-attachment:scroll}.entry{min-height:100vh;grid-template-columns:1fr;padding:50px 7vw 70px;gap:42px}.entry-copy{margin:0;max-width:620px}.entry-side{justify-self:stretch;max-width:560px}.note{position:static;margin-top:20px}.brand-title{font-size:clamp(68px,13vw,108px)}}
+@media(max-width:620px){.entry{padding:32px 18px 44px;gap:34px}.card{padding:26px 20px 25px;border-radius:24px}.logo-wrap{width:96px;height:96px}.logo{width:76px;height:76px}.kicker{font-size:10px}.sub{font-size:13px}.brand-title{font-size:66px}.tagline{font-size:16px;margin-top:22px}.note{display:none}}
+</style>
+</head>
+<body>
+<div class="transition" id="transition"></div>
+<main class="entry">
+  <section class="entry-copy">
+    <h2 class="brand-title">LIFE<br>RPG</h2>
+    <p class="tagline">Turn every day into an adventure worth remembering.</p>
+  </section>
+  <div class="note">LEVEL UP EVERY DAY</div>
+  <section class="entry-side">
+    <div class="card">
+      <div class="logo-wrap"><img class="logo" src="/logo.png" alt="LIFE RPG logo"></div>
+      <p class="kicker">WELCOME BACK, PLAYER</p>
+      <h1>Enter your world.</h1>
+      <p class="sub">Your journey continues where you left off.</p>
+      <form class="form" id="loginForm">
+        <label><span class="label">Username or email</span><input class="input" id="identity" autocomplete="username" placeholder="Enter your username or email"></label>
+        <label><span class="label">Password</span><input class="input" id="password" type="password" autocomplete="current-password" placeholder="Enter your password"></label>
+        <button class="primary" type="submit">Continue <span>↗</span></button>
+      </form>
+      <p class="create">Don't have an account? <button class="link" id="createAccount" type="button">Create an account</button></p>
+    </div>
+  </section>
+</main>
+<script>
+const transition=document.getElementById('transition');
+document.getElementById('createAccount').addEventListener('click',()=>{transition.classList.add('active');setTimeout(()=>window.location.href='/page2.html',300)});
+document.getElementById('loginForm').addEventListener('submit',async(e)=>{
+  e.preventDefault();
+  const identity=document.getElementById('identity').value.trim();
+  const password=document.getElementById('password').value;
+  if(!identity||!password){alert('Enter your username/email and password.');return;}
+  try{
+    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identity,password})});
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error||'Login failed.');
+    localStorage.setItem('lifeRpgToken',data.token||'');
+    localStorage.setItem('lifeRpgUsername',data.user?.username||'');
+    sessionStorage.setItem('lifeRpgToken',data.token||'');
+    sessionStorage.setItem('lifeRpgUsername',data.user?.username||'');
+    window.location.href='/';
+  }catch(err){alert(err.message||'Login failed.');}
+});
+</script>
+</body>
+</html>
