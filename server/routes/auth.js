@@ -1,3 +1,7 @@
+import dns from 'node:dns';
+
+dns.setDefaultResultOrder('ipv4first');
+
 import express from "express";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
