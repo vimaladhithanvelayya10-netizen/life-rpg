@@ -78,7 +78,7 @@ document.getElementById('loginForm').addEventListener('submit',async(e)=>{
   const password=document.getElementById('password').value;
   if(!identity||!password){alert('Enter your username/email and password.');return;}
   try{
-    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identity,password})});
+    const r=await fetch('https://practical-miracle-production-003d.up.railway.app/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identity,password})});
     const data=await r.json();
     if(!r.ok) throw new Error(data.error||'Login failed.');
     localStorage.setItem('lifeRpgToken',data.token||'');

@@ -1,7 +1,8 @@
 (() => {
   const $ = (id) => document.getElementById(id);
+  const API_URL = 'https://practical-miracle-production-003d.up.railway.app';
   const postJson = async (url, payload) => {
-    const response = await fetch(url, {
+    const response = await fetch(`${API_URL}${url}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
