@@ -22,189 +22,217 @@ const otpTtlMs = 10 * 60 * 1000;
 const otpResendMs = 30 * 1000;
 const maxOtpAttempts = 5;
 
-/* =========================================================
-   RESEND EMAIL
-   Required Railway variables:
-   RESEND_API_KEY
-   RESEND_FROM
+let nodemailer;
+try {
+  nodemailer = (await import("nodemailer")).default;
+} catch {
+  /* optional */
+}
 
-   Optional:
-   RESEND_REPLY_TO
+/* =========================================================
+   GMAIL SMTP & RESEND EMAIL SERVICE
+   Primary: Gmail SMTP (Nodemailer) — sends to ANY recipient
+   Fallback: Resend API
    ========================================================= */
 
-const sendOtpEmail = async (email, otp) => {
-  const apiKey = String(
-    process.env.RESEND_API_KEY || "",
-  ).trim();
+let mailTransporter = null;
+let mailConfigError = null;
 
-  const from = String(
-    process.env.RESEND_FROM || "",
-  ).trim();
+const getMailTransporter = () => {
+  if (mailTransporter || mailConfigError) return mailTransporter;
 
-  const replyTo = String(
-    process.env.RESEND_REPLY_TO || "",
-  ).trim();
-
-  if (!apiKey) {
-    console.error(
-      "RESEND_API_KEY is not configured.",
-    );
-    return {
-      success: false,
-      error: "RESEND_API_KEY is not configured on the server.",
-    };
+  if (!nodemailer) {
+    mailConfigError = "Nodemailer is not installed. Run npm install.";
+    return null;
   }
 
+  const user = String(
+    process.env.SMTP_USER || process.env.GMAIL_USER || "",
+  ).trim();
+  const pass = String(
+    process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || "",
+  ).replace(/\s+/g, "");
+  const host = String(
+    process.env.SMTP_HOST || "smtp.gmail.com",
+  ).trim();
+  const port = Number(process.env.SMTP_PORT || 465);
+  const secure =
+    String(
+      process.env.SMTP_SECURE || (port === 465),
+    ).toLowerCase() === "true";
+
+  if (!user || !pass) {
+    mailConfigError =
+      "Gmail SMTP is not configured. Add SMTP_USER and SMTP_PASS (a Google App Password) to environment variables.";
+    return null;
+  }
+
+  mailTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+    tls: { minVersion: "TLSv1.2", rejectUnauthorized: false },
+    family: 4,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+  });
+  return mailTransporter;
+};
+
+const sendOtpViaSmtp = async (email, otp) => {
+  const transporter = getMailTransporter();
+  if (!transporter) throw new Error(mailConfigError || "Email service is not configured.");
+
+  const user = String(
+    process.env.SMTP_USER || process.env.GMAIL_USER || "",
+  ).trim();
+  const from = String(
+    process.env.MAIL_FROM || `LIFE RPG <${user}>`,
+  ).trim();
+  const logoUrl = String(
+    process.env.MAIL_LOGO_URL || "",
+  ).trim();
+
+  const html = `
+    <div style="margin:0;background:#0b1018;padding:40px 16px;font-family:Arial,Helvetica,sans-serif;color:#ffffff">
+      <div style="max-width:560px;margin:0 auto;background:#121a26;border:1px solid #2a3648;border-radius:20px;padding:32px">
+        <div style="font-size:12px;font-weight:800;letter-spacing:3px;color:#ffd777;text-transform:uppercase">LIFE RPG</div>
+        <h1 style="font-size:30px;line-height:1.2;margin:16px 0 8px;color:#ffffff">Verify your email.</h1>
+        <p style="font-size:15px;line-height:1.6;color:#cbd4e3;margin:0 0 22px">Use the verification code below to continue creating your LIFE RPG account.</p>
+        <div style="background:#1b2534;border:1px solid #344258;border-radius:16px;padding:20px;text-align:center">
+          <div style="font-size:12px;letter-spacing:2px;color:#9eacc2;text-transform:uppercase;margin-bottom:8px">Your code</div>
+          <div style="font-size:42px;letter-spacing:12px;font-weight:900;color:#ffd777;padding-left:12px">${otp}</div>
+        </div>
+        <p style="font-size:13px;line-height:1.6;color:#9eacc2;margin:20px 0 0">This code expires in 10 minutes. If you did not request this email, you can ignore it.</p>
+      </div>
+    </div>`;
+
+  try {
+    await transporter.sendMail({
+      from,
+      to: email,
+      replyTo: user,
+      subject: `${otp} — Your LIFE RPG verification code`,
+      text: `Your LIFE RPG verification code is ${otp}. It expires in 10 minutes.`,
+      html,
+      ...(logoUrl ? { headers: { "X-LIFE-RPG-Logo": logoUrl } } : {}),
+    });
+    console.log(`OTP email sent successfully via Gmail SMTP to ${email}.`);
+    return true;
+  } catch (error) {
+    if (error?.code === "EAUTH" || error?.responseCode === 535) {
+      throw new Error("Gmail rejected the SMTP login. Turn on 2-Step Verification and create a Google App Password, then use that App Password as SMTP_PASS.");
+    }
+    if (["ETIMEDOUT", "ECONNECTION", "ECONNREFUSED"].includes(error?.code)) {
+      throw new Error("Could not reach Gmail SMTP. Check your internet connection and SMTP_HOST/SMTP_PORT.");
+    }
+    console.error("SMTP send error:", error);
+    throw new Error(error?.message || "Gmail could not send the verification code.");
+  }
+};
+
+const sendOtpViaResend = async (email, otp) => {
+  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  const from = String(process.env.RESEND_FROM || "").trim();
+  const replyTo = String(process.env.RESEND_REPLY_TO || "").trim();
+
+  if (!apiKey) {
+    return { success: false, error: "RESEND_API_KEY is not configured on the server." };
+  }
   if (!from) {
-    console.error(
-      "RESEND_FROM is not configured.",
-    );
-    return {
-      success: false,
-      error: "RESEND_FROM is not configured. Please set a verified sender address.",
-    };
+    return { success: false, error: "RESEND_FROM is not configured. Please set a verified sender address." };
   }
 
   const html = `
     <div style="margin:0;background:#0b1018;padding:40px 16px;font-family:Arial,Helvetica,sans-serif;color:#ffffff">
       <div style="max-width:560px;margin:0 auto;background:#121a26;border:1px solid #2a3648;border-radius:20px;padding:32px">
-
-        <div style="font-size:12px;font-weight:800;letter-spacing:3px;color:#ffd777;text-transform:uppercase">
-          LIFE RPG
-        </div>
-
-        <h1 style="font-size:30px;line-height:1.2;margin:16px 0 8px;color:#ffffff">
-          Verify your email.
-        </h1>
-
-        <p style="font-size:15px;line-height:1.6;color:#cbd4e3;margin:0 0 22px">
-          Use the verification code below to continue creating your LIFE RPG account.
-        </p>
-
+        <div style="font-size:12px;font-weight:800;letter-spacing:3px;color:#ffd777;text-transform:uppercase">LIFE RPG</div>
+        <h1 style="font-size:30px;line-height:1.2;margin:16px 0 8px;color:#ffffff">Verify your email.</h1>
+        <p style="font-size:15px;line-height:1.6;color:#cbd4e3;margin:0 0 22px">Use the verification code below to continue creating your LIFE RPG account.</p>
         <div style="background:#1b2534;border:1px solid #344258;border-radius:16px;padding:20px;text-align:center">
-
-          <div style="font-size:12px;letter-spacing:2px;color:#9eacc2;text-transform:uppercase;margin-bottom:8px">
-            Your code
-          </div>
-
-          <div style="font-size:42px;letter-spacing:12px;font-weight:900;color:#ffd777;padding-left:12px">
-            ${otp}
-          </div>
-
+          <div style="font-size:12px;letter-spacing:2px;color:#9eacc2;text-transform:uppercase;margin-bottom:8px">Your code</div>
+          <div style="font-size:42px;letter-spacing:12px;font-weight:900;color:#ffd777;padding-left:12px">${otp}</div>
         </div>
-
-        <p style="font-size:13px;line-height:1.6;color:#9eacc2;margin:20px 0 0">
-          This code expires in 10 minutes. If you did not request this email, you can ignore it.
-        </p>
-
+        <p style="font-size:13px;line-height:1.6;color:#9eacc2;margin:20px 0 0">This code expires in 10 minutes. If you did not request this email, you can ignore it.</p>
       </div>
-    </div>
-  `;
+    </div>`;
 
-  const text =
-    `Your LIFE RPG verification code is ${otp}. ` +
-    `It expires in 10 minutes.`;
-
+  const text = `Your LIFE RPG verification code is ${otp}. It expires in 10 minutes.`;
   const controller = new AbortController();
-
-  const timeout = setTimeout(
-    () => controller.abort(),
-    15000,
-  );
+  const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const response = await fetch(
-      "https://api.resend.com/emails",
-      {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-
-        body: JSON.stringify({
-          from,
-          to: [email],
-          subject: `${otp} — Your LIFE RPG verification code`,
-          text,
-          html,
-
-          ...(replyTo
-            ? {
-                reply_to: replyTo,
-              }
-            : {}),
-        }),
-
-        signal: controller.signal,
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        from,
+        to: [email],
+        subject: `${otp} — Your LIFE RPG verification code`,
+        text,
+        html,
+        ...(replyTo ? { reply_to: replyTo } : {}),
+      }),
+      signal: controller.signal,
+    });
 
-    const responseText =
-      await response.text();
-
+    const responseText = await response.text();
     let data = {};
-
-    try {
-      data = responseText
-        ? JSON.parse(responseText)
-        : {};
-    } catch {
-      data = {};
-    }
+    try { data = responseText ? JSON.parse(responseText) : {}; } catch { data = {}; }
 
     if (!response.ok) {
-      console.error(
-        "Resend email failed:",
-        {
-          status: response.status,
-          response:
-            data || responseText,
-        },
-      );
-
-      const errorMessage =
-        data?.message ||
-        (typeof data?.error === "string" ? data.error : "") ||
-        "Failed to send verification email via email service.";
-
-      return {
-        success: false,
-        error: errorMessage,
-      };
+      console.error("Resend email failed:", { status: response.status, response: data || responseText });
+      const errorMessage = data?.message || (typeof data?.error === "string" ? data.error : "") || "Failed to send verification email via email service.";
+      return { success: false, error: errorMessage };
     }
 
-    console.log(
-      `OTP email sent successfully through Resend to ${email}.`,
-    );
-
+    console.log(`OTP email sent successfully through Resend to ${email}.`);
     return { success: true };
   } catch (error) {
-    if (
-      error?.name ===
-      "AbortError"
-    ) {
-      console.error(
-        "Resend email request timed out.",
-      );
-      return {
-        success: false,
-        error: "Email delivery timed out. Please try again.",
-      };
-    } else {
-      console.error(
-        "Resend email request failed:",
-        error.message,
-      );
-      return {
-        success: false,
-        error: error.message || "Failed to send verification email.",
-      };
+    if (error?.name === "AbortError") {
+      return { success: false, error: "Email delivery timed out. Please try again." };
     }
+    return { success: false, error: error.message || "Failed to send verification email." };
   } finally {
     clearTimeout(timeout);
   }
+};
+
+const sendOtpEmail = async (email, otp) => {
+  const smtpUser = String(process.env.SMTP_USER || process.env.GMAIL_USER || "").trim();
+  const smtpPass = String(process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || "").replace(/\s+/g, "");
+  const hasSmtp = Boolean(smtpUser && smtpPass);
+  const hasResend = Boolean(process.env.RESEND_API_KEY);
+
+  // If SMTP is configured, prioritize it — it has no sandbox domain restrictions!
+  if (hasSmtp) {
+    try {
+      await sendOtpViaSmtp(email, otp);
+      return { success: true };
+    } catch (smtpErr) {
+      console.warn("Gmail SMTP attempt failed:", smtpErr.message);
+      if (hasResend) {
+        console.log("Falling back to Resend email service...");
+        return sendOtpViaResend(email, otp);
+      }
+      return { success: false, error: smtpErr.message };
+    }
+  }
+
+  // If only Resend is configured
+  if (hasResend) {
+    return sendOtpViaResend(email, otp);
+  }
+
+  return {
+    success: false,
+    error: "Email delivery is not configured. Please set SMTP_USER and SMTP_PASS (a Google App Password) in Railway environment variables.",
+  };
 };
 
 
