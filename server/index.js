@@ -90,9 +90,26 @@ async function startServer() {
       client.release();
     }
 
-    app.listen(port, () => {
-      console.log(`LIFE RPG Backend API listening on http://localhost:${port}`);
+    const server = app.listen(port, '0.0.0.0', () => {
+      console.log(`LIFE RPG Backend API listening on port ${port}`);
     });
+
+    const shutdown = (signal) => {
+      console.log(`${signal} received: closing HTTP server gracefully...`);
+      server.close(() => {
+        console.log('HTTP server closed.');
+        pool.end().catch(() => {}).finally(() => {
+          process.exit(0);
+        });
+      });
+      setTimeout(() => {
+        console.warn('Forced shutdown after timeout.');
+        process.exit(0);
+      }, 5000);
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (err) {
     console.error('Failed to start server:', err);
     process.exit(1);
