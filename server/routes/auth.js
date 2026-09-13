@@ -30,22 +30,75 @@ const maxOtpAttempts = 5;
 
    Optional:
    RESEND_REPLY_TO
+
+   Testing variables:
+   RESEND_TEST_MODE=true
+   RESEND_TEST_RECIPIENT=your-resend-account-email
    ========================================================= */
 
 const sendOtpEmail = async (email, otp) => {
-  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  const apiKey = String(
+    process.env.RESEND_API_KEY || "",
+  ).trim();
 
   const from = String(
-    process.env.RESEND_FROM || "LIFE RPG <onboarding@resend.dev>",
+    process.env.RESEND_FROM ||
+      "LIFE RPG <onboarding@resend.dev>",
   ).trim();
 
   const replyTo = String(
     process.env.RESEND_REPLY_TO || "",
   ).trim();
 
+  /*
+   * Resend test accounts can only send testing emails
+   * to the email address belonging to the Resend account.
+   *
+   * Enable this ONLY while testing:
+   *
+   * RESEND_TEST_MODE=true
+   * RESEND_TEST_RECIPIENT=your-resend-account-email
+   */
+  const testMode = [
+    "1",
+    "true",
+    "yes",
+  ].includes(
+    String(
+      process.env.RESEND_TEST_MODE || "",
+    )
+      .trim()
+      .toLowerCase(),
+  );
+
+  const testRecipient = String(
+    process.env.RESEND_TEST_RECIPIENT || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  const recipient = testMode
+    ? testRecipient
+    : email;
+
   if (!apiKey) {
-    console.error("RESEND_API_KEY is not configured.");
+    console.error(
+      "RESEND_API_KEY is not configured.",
+    );
     return false;
+  }
+
+  if (testMode && !testRecipient) {
+    console.error(
+      "RESEND_TEST_MODE is enabled but RESEND_TEST_RECIPIENT is missing.",
+    );
+    return false;
+  }
+
+  if (testMode) {
+    console.log(
+      `RESEND_TEST_MODE enabled. OTP will be delivered to ${testRecipient} instead of ${email}.`,
+    );
   }
 
   const html = `
@@ -65,6 +118,7 @@ const sendOtpEmail = async (email, otp) => {
         </p>
 
         <div style="background:#1b2534;border:1px solid #344258;border-radius:16px;padding:20px;text-align:center">
+
           <div style="font-size:12px;letter-spacing:2px;color:#9eacc2;text-transform:uppercase;margin-bottom:8px">
             Your code
           </div>
@@ -72,6 +126,7 @@ const sendOtpEmail = async (email, otp) => {
           <div style="font-size:42px;letter-spacing:12px;font-weight:900;color:#ffd777;padding-left:12px">
             ${otp}
           </div>
+
         </div>
 
         <p style="font-size:13px;line-height:1.6;color:#9eacc2;margin:20px 0 0">
@@ -87,54 +142,80 @@ const sendOtpEmail = async (email, otp) => {
     `It expires in 10 minutes.`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  const timeout = setTimeout(
+    () => controller.abort(),
+    15000,
+  );
 
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
+    const response = await fetch(
+      "https://api.resend.com/emails",
+      {
+        method: "POST",
 
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+          from,
+          to: [recipient],
+          subject: `${otp} — Your LIFE RPG verification code`,
+          text,
+          html,
+
+          ...(replyTo
+            ? {
+                reply_to: replyTo,
+              }
+            : {}),
+        }),
+
+        signal: controller.signal,
       },
+    );
 
-      body: JSON.stringify({
-        from,
-        to: [email],
-        subject: `${otp} — Your LIFE RPG verification code`,
-        text,
-        html,
-        ...(replyTo ? { reply_to: replyTo } : {}),
-      }),
-
-      signal: controller.signal,
-    });
-
-    const responseText = await response.text();
+    const responseText =
+      await response.text();
 
     let data = {};
 
     try {
-      data = responseText ? JSON.parse(responseText) : {};
+      data = responseText
+        ? JSON.parse(responseText)
+        : {};
     } catch {
       data = {};
     }
 
     if (!response.ok) {
-      console.error("Resend email failed:", {
-        status: response.status,
-        response: data || responseText,
-      });
+      console.error(
+        "Resend email failed:",
+        {
+          status: response.status,
+          response:
+            data || responseText,
+        },
+      );
 
       return false;
     }
 
-    console.log("OTP email sent successfully through Resend.");
+    console.log(
+      `OTP email sent successfully through Resend to ${recipient}.`,
+    );
 
     return true;
   } catch (error) {
-    if (error?.name === "AbortError") {
-      console.error("Resend email request timed out.");
+    if (
+      error?.name ===
+      "AbortError"
+    ) {
+      console.error(
+        "Resend email request timed out.",
+      );
     } else {
       console.error(
         "Resend email request failed:",
@@ -153,248 +234,326 @@ const sendOtpEmail = async (email, otp) => {
    SEND OTP
    ========================================================= */
 
-router.post("/send-otp", async (req, res) => {
-  try {
-    const email = String(req.body?.email || "")
-      .trim()
-      .toLowerCase();
+router.post(
+  "/send-otp",
+  async (req, res) => {
+    try {
+      const email = String(
+        req.body?.email || "",
+      )
+        .trim()
+        .toLowerCase();
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res
-        .status(400)
-        .json({
-          error: "Enter a valid email address.",
-        });
-    }
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+          email,
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Enter a valid email address.",
+          });
+      }
 
-    const existing = await query(
-      "SELECT id FROM users WHERE LOWER(email) = $1",
-      [email],
-    );
-
-    if (existing.rowCount > 0) {
-      return res.status(409).json({
-        error:
-          "An account with this email already exists. Please log in.",
-      });
-    }
-
-    const recent = await query(
-      `
-      SELECT created_at
-      FROM auth_otps
-      WHERE LOWER(email) = $1
-      ORDER BY created_at DESC
-      LIMIT 1
-      `,
-      [email],
-    );
-
-    if (recent.rowCount > 0) {
-      const lastSent =
-        new Date(recent.rows[0].created_at).getTime();
-
-      const elapsed = Date.now() - lastSent;
-
-      if (elapsed < otpResendMs) {
-        const wait = Math.ceil(
-          (otpResendMs - elapsed) / 1000,
+      const existing =
+        await query(
+          "SELECT id FROM users WHERE LOWER(email) = $1",
+          [email],
         );
 
-        return res.status(429).json({
-          error:
-            `Please wait ${wait} seconds before requesting another code.`,
-        });
+      if (existing.rowCount > 0) {
+        return res
+          .status(409)
+          .json({
+            error:
+              "An account with this email already exists. Please log in.",
+          });
       }
-    }
 
-    const otp = String(
-      crypto.randomInt(1000, 10000),
-    );
+      const recent =
+        await query(
+          `
+          SELECT created_at
+          FROM auth_otps
+          WHERE LOWER(email) = $1
+          ORDER BY created_at DESC
+          LIMIT 1
+          `,
+          [email],
+        );
 
-    const expiresAt = new Date(
-      Date.now() + otpTtlMs,
-    );
+      if (recent.rowCount > 0) {
+        const lastSent =
+          new Date(
+            recent.rows[0]
+              .created_at,
+          ).getTime();
 
-    await query(
-      `
-      INSERT INTO auth_otps (
-        email,
-        otp_code,
-        otp_hash,
-        purpose,
-        expires_at,
-        attempts,
-        verified
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        'EMAIL_VERIFICATION',
-        $4,
-        0,
-        false
-      )
-      `,
-      [
-        email,
-        otp,
-        otp,
-        expiresAt,
-      ],
-    );
+        const elapsed =
+          Date.now() -
+          lastSent;
 
-    let sent = false;
+        if (
+          elapsed < otpResendMs
+        ) {
+          const wait =
+            Math.ceil(
+              (otpResendMs -
+                elapsed) /
+                1000,
+            );
 
-    try {
-      sent = await sendOtpEmail(email, otp);
-    } catch (mailErr) {
-      console.error(
-        "Failed to send verification email:",
-        mailErr.message,
+          return res
+            .status(429)
+            .json({
+              error:
+                `Please wait ${wait} seconds before requesting another code.`,
+            });
+        }
+      }
+
+      const otp = String(
+        crypto.randomInt(
+          1000,
+          10000,
+        ),
       );
+
+      const expiresAt =
+        new Date(
+          Date.now() +
+            otpTtlMs,
+        );
+
+      await query(
+        `
+        INSERT INTO auth_otps (
+          email,
+          otp_code,
+          otp_hash,
+          purpose,
+          expires_at,
+          attempts,
+          verified
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          'EMAIL_VERIFICATION',
+          $4,
+          0,
+          false
+        )
+        `,
+        [
+          email,
+          otp,
+          otp,
+          expiresAt,
+        ],
+      );
+
+      let sent = false;
+
+      try {
+        sent =
+          await sendOtpEmail(
+            email,
+            otp,
+          );
+      } catch (mailErr) {
+        console.error(
+          "Failed to send verification email:",
+          mailErr.message,
+        );
+      }
+
+      if (!sent) {
+        return res
+          .status(502)
+          .json({
+            error:
+              "Unable to send verification email. Please check your address or try again later.",
+          });
+      }
+
+      return res
+        .status(200)
+        .json({
+          message:
+            "Verification code sent to your email.",
+        });
+    } catch (err) {
+      console.error(
+        "Error in send-otp:",
+        err,
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            "Failed to generate verification code.",
+        });
     }
-
-    if (!sent) {
-      return res.status(502).json({
-        error:
-          "Unable to send verification email. Please check your address or try again later.",
-      });
-    }
-
-    return res.status(200).json({
-      message:
-        "Verification code sent to your email.",
-    });
-  } catch (err) {
-    console.error("Error in send-otp:", err);
-
-    return res.status(500).json({
-      error:
-        "Failed to generate verification code.",
-    });
-  }
-});
+  },
+);
 
 
 /* =========================================================
    VERIFY OTP
    ========================================================= */
 
-router.post("/verify-otp", async (req, res) => {
-  try {
-    const email = String(req.body?.email || "")
-      .trim()
-      .toLowerCase();
+router.post(
+  "/verify-otp",
+  async (req, res) => {
+    try {
+      const email = String(
+        req.body?.email || "",
+      )
+        .trim()
+        .toLowerCase();
 
-    const otp = String(req.body?.otp || "")
-      .trim();
+      const otp = String(
+        req.body?.otp || "",
+      ).trim();
 
-    if (!email || !otp) {
-      return res.status(400).json({
-        error: "Email and OTP are required.",
-      });
-    }
+      if (!email || !otp) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Email and OTP are required.",
+          });
+      }
 
-    const recordRes = await query(
-      `
-      SELECT *
-      FROM auth_otps
-      WHERE LOWER(email) = $1
-        AND consumed_at IS NULL
-      ORDER BY created_at DESC
-      LIMIT 1
-      `,
-      [email],
-    );
+      const recordRes =
+        await query(
+          `
+          SELECT *
+          FROM auth_otps
+          WHERE LOWER(email) = $1
+            AND consumed_at IS NULL
+          ORDER BY created_at DESC
+          LIMIT 1
+          `,
+          [email],
+        );
 
-    if (!recordRes.rowCount) {
-      return res.status(400).json({
-        error:
-          "No verification code was requested for this email.",
-      });
-    }
+      if (!recordRes.rowCount) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "No verification code was requested for this email.",
+          });
+      }
 
-    const record = recordRes.rows[0];
+      const record =
+        recordRes.rows[0];
 
-    if (
-      new Date(record.expires_at).getTime() <
-      Date.now()
-    ) {
-      return res.status(400).json({
-        error:
-          "That code has expired. Request a new code.",
-      });
-    }
+      if (
+        new Date(
+          record.expires_at,
+        ).getTime() <
+        Date.now()
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "That code has expired. Request a new code.",
+          });
+      }
 
-    if (
-      record.attempts >= maxOtpAttempts
-    ) {
-      return res.status(429).json({
-        error:
-          "Too many incorrect attempts. Request a new code.",
-      });
-    }
+      if (
+        record.attempts >=
+        maxOtpAttempts
+      ) {
+        return res
+          .status(429)
+          .json({
+            error:
+              "Too many incorrect attempts. Request a new code.",
+          });
+      }
 
-    if (
-      !/^\d{4}$/.test(otp) ||
-      otp !== record.otp_code
-    ) {
+      if (
+        !/^\d{4}$/.test(
+          otp,
+        ) ||
+        otp !==
+          record.otp_code
+      ) {
+        await query(
+          `
+          UPDATE auth_otps
+          SET attempts = attempts + 1
+          WHERE id = $1
+          `,
+          [record.id],
+        );
+
+        const remaining =
+          Math.max(
+            0,
+            maxOtpAttempts -
+              (record.attempts +
+                1),
+          );
+
+        return res
+          .status(400)
+          .json({
+            error:
+              `Invalid verification code. ${remaining} attempts remaining.`,
+          });
+      }
+
+      const onboardingToken =
+        crypto.randomBytes(
+          32,
+        ).toString("hex");
+
       await query(
         `
         UPDATE auth_otps
-        SET attempts = attempts + 1
-        WHERE id = $1
+        SET
+          verified = true,
+          onboarding_token = $1
+        WHERE id = $2
         `,
-        [record.id],
+        [
+          onboardingToken,
+          record.id,
+        ],
       );
 
-      const remaining = Math.max(
-        0,
-        maxOtpAttempts -
-          (record.attempts + 1),
+      return res
+        .status(200)
+        .json({
+          message:
+            "Email verified.",
+          onboardingToken,
+        });
+    } catch (err) {
+      console.error(
+        "Error in verify-otp:",
+        err,
       );
 
-      return res.status(400).json({
-        error:
-          `Invalid verification code. ${remaining} attempts remaining.`,
-      });
+      return res
+        .status(500)
+        .json({
+          error:
+            "Failed to verify code.",
+        });
     }
-
-    const onboardingToken =
-      crypto.randomBytes(32).toString("hex");
-
-    await query(
-      `
-      UPDATE auth_otps
-      SET
-        verified = true,
-        onboarding_token = $1
-      WHERE id = $2
-      `,
-      [
-        onboardingToken,
-        record.id,
-      ],
-    );
-
-    return res.status(200).json({
-      message: "Email verified.",
-      onboardingToken,
-    });
-  } catch (err) {
-    console.error(
-      "Error in verify-otp:",
-      err,
-    );
-
-    return res.status(500).json({
-      error:
-        "Failed to verify code.",
-    });
-  }
-});
+  },
+);
 
 
 /* =========================================================
@@ -410,23 +569,33 @@ async function generateUniqueUsername(
   const normalizedLetters =
     cleanName
       .toLowerCase()
-      .replace(/[^a-z]/g, "");
+      .replace(
+        /[^a-z]/g,
+        "",
+      );
 
   const prefix =
     normalizedLetters
       .slice(0, 4)
-      .padEnd(4, "x");
+      .padEnd(
+        4,
+        "x",
+      );
 
-  const dd =
-    String(birthDay).padStart(2, "0");
+  const dd = String(
+    birthDay,
+  ).padStart(2, "0");
 
-  const mm =
-    String(birthMonth).padStart(2, "0");
+  const mm = String(
+    birthMonth,
+  ).padStart(2, "0");
 
   const baseUsername =
     `${prefix}${dd}${mm}`;
 
-  let candidate = baseUsername;
+  let candidate =
+    baseUsername;
+
   let suffix = 2;
 
   while (true) {
@@ -440,7 +609,10 @@ async function generateUniqueUsername(
         [candidate],
       );
 
-    if (result.rowCount === 0) {
+    if (
+      result.rowCount ===
+      0
+    ) {
       return candidate;
     }
 
@@ -456,7 +628,9 @@ async function generateUniqueUsername(
    FRIEND CODE GENERATOR
    ========================================================= */
 
-async function generateUniqueFriendCode(client) {
+async function generateUniqueFriendCode(
+  client,
+) {
   while (true) {
     const part1 =
       crypto
@@ -483,7 +657,10 @@ async function generateUniqueFriendCode(client) {
         [code],
       );
 
-    if (result.rowCount === 0) {
+    if (
+      result.rowCount ===
+      0
+    ) {
       return code;
     }
   }
@@ -494,749 +671,852 @@ async function generateUniqueFriendCode(client) {
    CREATE ACCOUNT
    ========================================================= */
 
-router.post("/create-account", async (req, res) => {
-  try {
-    const {
-      email,
-      onboardingToken,
-      name,
-      age,
-      birthYear,
-      birthDay,
-      birthMonth,
-      birthDate,
-      contact,
-      gender,
-      password,
-      profilePhoto,
-    } = req.body || {};
+router.post(
+  "/create-account",
+  async (req, res) => {
+    try {
+      const {
+        email,
+        onboardingToken,
+        name,
+        age,
+        birthYear,
+        birthDay,
+        birthMonth,
+        birthDate,
+        contact,
+        gender,
+        password,
+        profilePhoto,
+      } = req.body || {};
 
-    const normalizedEmail =
-      String(email || "")
-        .trim()
-        .toLowerCase();
+      const normalizedEmail =
+        String(email || "")
+          .trim()
+          .toLowerCase();
 
-    const passwordValue =
-      String(password || "");
-
-    const cleanName =
-      String(name || "").trim();
-
-    const cleanGender =
-      String(gender || "")
-        .trim()
-        .toLowerCase();
-
-    const cleanContact =
-      String(contact || "").trim();
-
-    const numAge = Number(age);
-    const numBirthYear = Number(birthYear);
-    const numBirthDay = Number(birthDay);
-    const numBirthMonth = Number(birthMonth);
-
-    if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        normalizedEmail,
-      )
-    ) {
-      throw new Error(
-        "Enter a valid email address.",
-      );
-    }
-
-    if (!onboardingToken) {
-      throw new Error(
-        "Verify your email before creating an account.",
-      );
-    }
-
-    if (cleanName.length < 2) {
-      throw new Error(
-        "Enter your full name.",
-      );
-    }
-
-    if (
-      !Number.isInteger(numAge) ||
-      numAge < 13 ||
-      numAge > 120
-    ) {
-      throw new Error(
-        "Enter a valid age (13-120).",
-      );
-    }
-
-    if (
-      !Number.isInteger(numBirthYear) ||
-      numBirthYear < 1900 ||
-      numBirthYear >
-        new Date().getFullYear()
-    ) {
-      throw new Error(
-        "Enter a valid birth year.",
-      );
-    }
-
-    if (
-      !Number.isInteger(numBirthDay) ||
-      numBirthDay < 1 ||
-      numBirthDay > 31 ||
-      !Number.isInteger(numBirthMonth) ||
-      numBirthMonth < 1 ||
-      numBirthMonth > 12
-    ) {
-      throw new Error(
-        "Enter a valid birth day and month.",
-      );
-    }
-
-    if (
-      !["male", "female"].includes(
-        cleanGender,
-      )
-    ) {
-      throw new Error(
-        "Select whether your character is male or female.",
-      );
-    }
-
-    if (passwordValue.length < 8) {
-      throw new Error(
-        "Password must be at least 8 characters.",
-      );
-    }
-
-    const tokenRecord =
-      await query(
-        `
-        SELECT *
-        FROM auth_otps
-        WHERE LOWER(email) = $1
-          AND onboarding_token = $2
-          AND verified = true
-          AND consumed_at IS NULL
-        ORDER BY created_at DESC
-        LIMIT 1
-        `,
-        [
-          normalizedEmail,
-          onboardingToken,
-        ],
-      );
-
-    if (!tokenRecord.rowCount) {
-      return res.status(400).json({
-        error:
-          "Verification session invalid or expired. Please verify your email again.",
-      });
-    }
-
-    let savedPhotoUrl = "";
-
-    if (profilePhoto?.dataUrl) {
-      const match =
-        String(profilePhoto.dataUrl).match(
-          /^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/i,
+      const passwordValue =
+        String(
+          password || "",
         );
 
-      if (!match) {
+      const cleanName =
+        String(
+          name || "",
+        ).trim();
+
+      const cleanGender =
+        String(
+          gender || "",
+        )
+          .trim()
+          .toLowerCase();
+
+      const cleanContact =
+        String(
+          contact || "",
+        ).trim();
+
+      const numAge =
+        Number(age);
+
+      const numBirthYear =
+        Number(birthYear);
+
+      const numBirthDay =
+        Number(birthDay);
+
+      const numBirthMonth =
+        Number(birthMonth);
+
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+          normalizedEmail,
+        )
+      ) {
         throw new Error(
-          "Profile photo must be PNG, JPG, JPEG, or WEBP.",
+          "Enter a valid email address.",
         );
       }
 
-      const buffer =
-        Buffer.from(
-          match[2],
-          "base64",
+      if (!onboardingToken) {
+        throw new Error(
+          "Verify your email before creating an account.",
+        );
+      }
+
+      if (
+        cleanName.length < 2
+      ) {
+        throw new Error(
+          "Enter your full name.",
+        );
+      }
+
+      if (
+        !Number.isInteger(
+          numAge,
+        ) ||
+        numAge < 13 ||
+        numAge > 120
+      ) {
+        throw new Error(
+          "Enter a valid age (13-120).",
+        );
+      }
+
+      if (
+        !Number.isInteger(
+          numBirthYear,
+        ) ||
+        numBirthYear < 1900 ||
+        numBirthYear >
+          new Date().getFullYear()
+      ) {
+        throw new Error(
+          "Enter a valid birth year.",
+        );
+      }
+
+      if (
+        !Number.isInteger(
+          numBirthDay,
+        ) ||
+        numBirthDay < 1 ||
+        numBirthDay > 31 ||
+        !Number.isInteger(
+          numBirthMonth,
+        ) ||
+        numBirthMonth < 1 ||
+        numBirthMonth > 12
+      ) {
+        throw new Error(
+          "Enter a valid birth day and month.",
+        );
+      }
+
+      if (
+        ![
+          "male",
+          "female",
+        ].includes(
+          cleanGender,
+        )
+      ) {
+        throw new Error(
+          "Select whether your character is male or female.",
+        );
+      }
+
+      if (
+        passwordValue.length <
+        8
+      ) {
+        throw new Error(
+          "Password must be at least 8 characters.",
+        );
+      }
+
+      const tokenRecord =
+        await query(
+          `
+          SELECT *
+          FROM auth_otps
+          WHERE LOWER(email) = $1
+            AND onboarding_token = $2
+            AND verified = true
+            AND consumed_at IS NULL
+          ORDER BY created_at DESC
+          LIMIT 1
+          `,
+          [
+            normalizedEmail,
+            onboardingToken,
+          ],
         );
 
       if (
-        buffer.length >
-        5 * 1024 * 1024
+        !tokenRecord.rowCount
       ) {
-        throw new Error(
-          "Profile photo must be 5 MB or smaller.",
-        );
+        return res
+          .status(400)
+          .json({
+            error:
+              "Verification session invalid or expired. Please verify your email again.",
+          });
       }
 
-      await fs.mkdir(
-        uploadsDir,
-        {
-          recursive: true,
-        },
-      );
+      let savedPhotoUrl = "";
 
-      const ext =
-        match[1]
-          .toLowerCase()
-          .replace("image/", "") ===
-        "jpeg"
-          ? "jpg"
-          : match[1]
-              .toLowerCase()
-              .replace("image/", "");
-
-      const filename =
-        `${crypto.randomUUID()}.${ext}`;
-
-      await fs.writeFile(
-        path.join(
-          uploadsDir,
-          filename,
-        ),
-        buffer,
-      );
-
-      savedPhotoUrl =
-        `/uploads/${filename}`;
-    }
-
-    const newUser =
-      await tx(async (client) => {
-        const emailCheck =
-          await client.query(
-            `
-            SELECT 1
-            FROM users
-            WHERE LOWER(email) = $1
-            `,
-            [normalizedEmail],
+      if (
+        profilePhoto?.dataUrl
+      ) {
+        const match =
+          String(
+            profilePhoto.dataUrl,
+          ).match(
+            /^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/i,
           );
 
-        if (emailCheck.rowCount > 0) {
-          throw Object.assign(
-            new Error(
-              "An account with this email already exists.",
-            ),
-            { status: 409 },
+        if (!match) {
+          throw new Error(
+            "Profile photo must be PNG, JPG, JPEG, or WEBP.",
           );
         }
 
-        const username =
-          await generateUniqueUsername(
-            client,
-            cleanName,
-            numBirthDay,
-            numBirthMonth,
+        const buffer =
+          Buffer.from(
+            match[2],
+            "base64",
           );
 
-        const friendCode =
-          await generateUniqueFriendCode(
-            client,
-          );
-
-        const passwordHash =
-          hashPassword(
-            passwordValue,
-          );
-
-        const userRes =
-          await client.query(
-            `
-            INSERT INTO users (
-              username,
-              display_name,
-              email,
-              password_hash,
-              status
-            )
-            VALUES (
-              $1,
-              $2,
-              $3,
-              $4,
-              'ACTIVE'
-            )
-            RETURNING
-              id,
-              username,
-              display_name,
-              email,
-              created_at
-            `,
-            [
-              username,
-              cleanName,
-              normalizedEmail,
-              passwordHash,
-            ],
-          );
-
-        const user =
-          userRes.rows[0];
-
-        await client.query(
-          `
-          INSERT INTO user_profiles (
-            user_id,
-            title,
-            level,
-            xp,
-            coins,
-            friend_code,
-            coach_avatar,
-            coach_personality,
-            birth_date,
-            birth_year,
-            birth_month,
-            birth_day,
-            age,
-            gender,
-            contact_number,
-            profile_image_url
-          )
-          VALUES (
-            $1,
-            'Novice Adventurer',
-            1,
-            0,
-            0,
-            $2,
-            $3,
-            'Sage',
-            $4::date,
-            $5,
-            $6,
-            $7,
-            $8,
-            $9,
-            $10,
-            $11
-          )
-          `,
-          [
-            user.id,
-            friendCode,
-            cleanGender,
-            birthDate || null,
-            numBirthYear,
-            numBirthMonth,
-            numBirthDay,
-            numAge,
-            cleanGender,
-            cleanContact,
-            savedPhotoUrl || null,
-          ],
-        );
-
-        await client.query(
-          `
-          INSERT INTO user_stats (
-            user_id,
-            intelligence,
-            strength,
-            vitality,
-            discipline,
-            agility,
-            charisma,
-            wealth
-          )
-          VALUES (
-            $1,
-            10,
-            10,
-            10,
-            10,
-            10,
-            10,
-            10
-          )
-          `,
-          [user.id],
-        );
-
-        await client.query(
-          `
-          INSERT INTO user_settings (
-            user_id,
-            theme,
-            sounds,
-            animations,
-            time_format,
-            week_start,
-            difficulty,
-            xp_animation,
-            quest_reminders,
-            streak_protection,
-            profile_visible,
-            leaderboard_visible
-          )
-          VALUES (
-            $1,
-            'dark',
-            true,
-            true,
-            '12h',
-            'Monday',
-            'Adaptive',
-            true,
-            true,
-            'Ask first',
-            true,
-            true
-          )
-          `,
-          [user.id],
-        );
-
-        const starterItems =
-          await client.query(`
-            SELECT id, code
-            FROM inventory_items
-            WHERE code IN (
-              'xp-boost',
-              'focus-potion',
-              'streak-shield'
-            )
-          `);
-
-        for (
-          const item of starterItems.rows
+        if (
+          buffer.length >
+          5 * 1024 * 1024
         ) {
-          await client.query(
-            `
-            INSERT INTO user_inventory (
-              user_id,
-              item_id,
-              quantity,
-              source
-            )
-            VALUES (
-              $1::uuid,
-              $2::uuid,
-              1,
-              'STARTER_PACK'
-            )
-            ON CONFLICT (
-              user_id,
-              item_id
-            ) DO NOTHING
-            `,
-            [
-              user.id,
-              item.id,
-            ],
-          );
-
-          await client.query(
-            `
-            INSERT INTO inventory_transactions (
-              user_id,
-              item_id,
-              delta,
-              reason
-            )
-            VALUES (
-              $1::uuid,
-              $2::uuid,
-              1,
-              'STARTER_PACK'
-            )
-            `,
-            [
-              user.id,
-              item.id,
-            ],
+          throw new Error(
+            "Profile photo must be 5 MB or smaller.",
           );
         }
 
-        await client.query(
-          `
-          UPDATE auth_otps
-          SET consumed_at = now()
-          WHERE id = $1
-          `,
-          [
-            tokenRecord
-              .rows[0]
-              .id,
-          ],
+        await fs.mkdir(
+          uploadsDir,
+          {
+            recursive:
+              true,
+          },
         );
 
-        await client.query(
-          `
-          INSERT INTO activity_events (
-            user_id,
-            kind,
-            text,
-            value,
-            visibility
-          )
-          VALUES (
-            $1,
-            'Account',
-            'Awakened your LIFE RPG character',
-            '+0 XP',
-            'PRIVATE'
-          )
-          `,
-          [user.id],
+        const ext =
+          match[1]
+            .toLowerCase()
+            .replace(
+              "image/",
+              "",
+            ) ===
+          "jpeg"
+            ? "jpg"
+            : match[1]
+                .toLowerCase()
+                .replace(
+                  "image/",
+                  "",
+                );
+
+        const filename =
+          `${crypto.randomUUID()}.${ext}`;
+
+        await fs.writeFile(
+          path.join(
+            uploadsDir,
+            filename,
+          ),
+          buffer,
         );
 
-        await client.query(
-          `
-          INSERT INTO notifications (
-            user_id,
-            type,
-            message
-          )
-          VALUES (
-            $1,
-            'SYSTEM',
-            'Welcome to LIFE RPG. Your journey begins today.'
-          )
-          `,
-          [user.id],
+        savedPhotoUrl =
+          `/uploads/${filename}`;
+      }
+
+      const newUser =
+        await tx(
+          async (
+            client,
+          ) => {
+            const emailCheck =
+              await client.query(
+                `
+                SELECT 1
+                FROM users
+                WHERE LOWER(email) = $1
+                `,
+                [normalizedEmail],
+              );
+
+            if (
+              emailCheck.rowCount >
+              0
+            ) {
+              throw Object.assign(
+                new Error(
+                  "An account with this email already exists.",
+                ),
+                {
+                  status: 409,
+                },
+              );
+            }
+
+            const username =
+              await generateUniqueUsername(
+                client,
+                cleanName,
+                numBirthDay,
+                numBirthMonth,
+              );
+
+            const friendCode =
+              await generateUniqueFriendCode(
+                client,
+              );
+
+            const passwordHash =
+              hashPassword(
+                passwordValue,
+              );
+
+            const userRes =
+              await client.query(
+                `
+                INSERT INTO users (
+                  username,
+                  display_name,
+                  email,
+                  password_hash,
+                  status
+                )
+                VALUES (
+                  $1,
+                  $2,
+                  $3,
+                  $4,
+                  'ACTIVE'
+                )
+                RETURNING
+                  id,
+                  username,
+                  display_name,
+                  email,
+                  created_at
+                `,
+                [
+                  username,
+                  cleanName,
+                  normalizedEmail,
+                  passwordHash,
+                ],
+              );
+
+            const user =
+              userRes.rows[0];
+
+            await client.query(
+              `
+              INSERT INTO user_profiles (
+                user_id,
+                title,
+                level,
+                xp,
+                coins,
+                friend_code,
+                coach_avatar,
+                coach_personality,
+                birth_date,
+                birth_year,
+                birth_month,
+                birth_day,
+                age,
+                gender,
+                contact_number,
+                profile_image_url
+              )
+              VALUES (
+                $1,
+                'Novice Adventurer',
+                1,
+                0,
+                0,
+                $2,
+                $3,
+                'Sage',
+                $4::date,
+                $5,
+                $6,
+                $7,
+                $8,
+                $9,
+                $10,
+                $11
+              )
+              `,
+              [
+                user.id,
+                friendCode,
+                cleanGender,
+                birthDate ||
+                  null,
+                numBirthYear,
+                numBirthMonth,
+                numBirthDay,
+                numAge,
+                cleanGender,
+                cleanContact,
+                savedPhotoUrl ||
+                  null,
+              ],
+            );
+
+            await client.query(
+              `
+              INSERT INTO user_stats (
+                user_id,
+                intelligence,
+                strength,
+                vitality,
+                discipline,
+                agility,
+                charisma,
+                wealth
+              )
+              VALUES (
+                $1,
+                10,
+                10,
+                10,
+                10,
+                10,
+                10,
+                10
+              )
+              `,
+              [user.id],
+            );
+
+            await client.query(
+              `
+              INSERT INTO user_settings (
+                user_id,
+                theme,
+                sounds,
+                animations,
+                time_format,
+                week_start,
+                difficulty,
+                xp_animation,
+                quest_reminders,
+                streak_protection,
+                profile_visible,
+                leaderboard_visible
+              )
+              VALUES (
+                $1,
+                'dark',
+                true,
+                true,
+                '12h',
+                'Monday',
+                'Adaptive',
+                true,
+                true,
+                'Ask first',
+                true,
+                true
+              )
+              `,
+              [user.id],
+            );
+
+            const starterItems =
+              await client.query(`
+                SELECT id, code
+                FROM inventory_items
+                WHERE code IN (
+                  'xp-boost',
+                  'focus-potion',
+                  'streak-shield'
+                )
+              `);
+
+            for (
+              const item of
+                starterItems.rows
+            ) {
+              await client.query(
+                `
+                INSERT INTO user_inventory (
+                  user_id,
+                  item_id,
+                  quantity,
+                  source
+                )
+                VALUES (
+                  $1::uuid,
+                  $2::uuid,
+                  1,
+                  'STARTER_PACK'
+                )
+                ON CONFLICT (
+                  user_id,
+                  item_id
+                ) DO NOTHING
+                `,
+                [
+                  user.id,
+                  item.id,
+                ],
+              );
+
+              await client.query(
+                `
+                INSERT INTO inventory_transactions (
+                  user_id,
+                  item_id,
+                  delta,
+                  reason
+                )
+                VALUES (
+                  $1::uuid,
+                  $2::uuid,
+                  1,
+                  'STARTER_PACK'
+                )
+                `,
+                [
+                  user.id,
+                  item.id,
+                ],
+              );
+            }
+
+            await client.query(
+              `
+              UPDATE auth_otps
+              SET consumed_at = now()
+              WHERE id = $1
+              `,
+              [
+                tokenRecord
+                  .rows[0]
+                  .id,
+              ],
+            );
+
+            await client.query(
+              `
+              INSERT INTO activity_events (
+                user_id,
+                kind,
+                text,
+                value,
+                visibility
+              )
+              VALUES (
+                $1,
+                'Account',
+                'Awakened your LIFE RPG character',
+                '+0 XP',
+                'PRIVATE'
+              )
+              `,
+              [user.id],
+            );
+
+            await client.query(
+              `
+              INSERT INTO notifications (
+                user_id,
+                type,
+                message
+              )
+              VALUES (
+                $1,
+                'SYSTEM',
+                'Welcome to LIFE RPG. Your journey begins today.'
+              )
+              `,
+              [user.id],
+            );
+
+            return {
+              id: user.id,
+              username:
+                user.username,
+              email:
+                user.email,
+              displayName:
+                user.display_name,
+              profilePhoto:
+                savedPhotoUrl,
+              level: 1,
+              xp: 0,
+              coins: 0,
+            };
+          },
         );
 
-        return {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          displayName:
-            user.display_name,
-          profilePhoto:
-            savedPhotoUrl,
-          level: 1,
-          xp: 0,
-          coins: 0,
-        };
-      });
+      const token =
+        createToken(
+          newUser,
+        );
 
-    const token =
-      createToken(newUser);
+      const tokenHash =
+        crypto
+          .createHash(
+            "sha256",
+          )
+          .update(
+            token +
+              crypto.randomUUID(),
+          )
+          .digest("hex");
 
-    const tokenHash =
-      crypto
-        .createHash("sha256")
-        .update(
-          token +
-            crypto.randomUUID(),
+      /*
+       * IMPORTANT:
+       * There is NO
+       * ON CONFLICT(refresh_token_hash)
+       * here.
+       *
+       * Your current database does not have
+       * the required unique/exclusion constraint
+       * on refresh_token_hash.
+       */
+      await query(
+        `
+        INSERT INTO auth_sessions (
+          user_id,
+          session_token,
+          refresh_token_hash,
+          expires_at
         )
-        .digest("hex");
+        VALUES (
+          $1,
+          $2,
+          $3,
+          now() + interval '30 days'
+        )
+        `,
+        [
+          newUser.id,
+          token,
+          tokenHash,
+        ],
+      );
 
-    /*
-     * IMPORTANT:
-     * No ON CONFLICT(refresh_token_hash) here.
-     * The database currently does not have a matching
-     * unique/exclusion constraint.
-     */
-    await query(
-      `
-      INSERT INTO auth_sessions (
-        user_id,
-        session_token,
-        refresh_token_hash,
-        expires_at
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        now() + interval '30 days'
-      )
-      `,
-      [
-        newUser.id,
-        token,
-        tokenHash,
-      ],
-    );
+      return res
+        .status(201)
+        .json({
+          message:
+            "Account created successfully.",
+          token,
+          user: newUser,
+        });
+    } catch (err) {
+      console.error(
+        "Error in create-account:",
+        err,
+      );
 
-    return res
-      .status(201)
-      .json({
-        message:
-          "Account created successfully.",
-        token,
-        user: newUser,
-      });
-  } catch (err) {
-    console.error(
-      "Error in create-account:",
-      err,
-    );
-
-    return res
-      .status(
-        err.status || 400,
-      )
-      .json({
-        error:
-          err.message ||
-          "Could not create account.",
-      });
-  }
-});
+      return res
+        .status(
+          err.status || 400,
+        )
+        .json({
+          error:
+            err.message ||
+            "Could not create account.",
+        });
+    }
+  },
+);
 
 
 /* =========================================================
    LOGIN
    ========================================================= */
 
-router.post("/login", async (req, res) => {
-  try {
-    const identity =
-      String(
-        req.body?.identity ||
-          req.body?.login ||
-          req.body?.username ||
-          req.body?.email ||
-          "",
-      )
-        .trim()
-        .toLowerCase();
+router.post(
+  "/login",
+  async (req, res) => {
+    try {
+      const identity =
+        String(
+          req.body?.identity ||
+            req.body?.login ||
+            req.body?.username ||
+            req.body?.email ||
+            "",
+        )
+          .trim()
+          .toLowerCase();
 
-    const password =
-      String(
-        req.body?.password || "",
-      );
+      const password =
+        String(
+          req.body?.password ||
+            "",
+        );
 
-    if (!identity || !password) {
-      return res.status(400).json({
-        error:
-          "Username/email and password are required.",
-      });
-    }
+      if (
+        !identity ||
+        !password
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Username/email and password are required.",
+          });
+      }
 
-    const userRes =
+      const userRes =
+        await query(
+          `
+          SELECT
+            u.id,
+            u.username,
+            u.display_name,
+            u.email,
+            u.password_hash,
+            u.status,
+            p.title,
+            p.level,
+            p.xp,
+            p.coins,
+            p.profile_image_url
+          FROM users u
+          LEFT JOIN user_profiles p
+            ON p.user_id = u.id
+          WHERE (
+            LOWER(u.email) = $1
+            OR LOWER(u.username) = $1
+          )
+          `,
+          [identity],
+        );
+
+      if (
+        !userRes.rowCount
+      ) {
+        return res
+          .status(401)
+          .json({
+            error:
+              "We could not find an account with that username or email.",
+          });
+      }
+
+      const user =
+        userRes.rows[0];
+
+      if (
+        user.status !==
+        "ACTIVE"
+      ) {
+        return res
+          .status(403)
+          .json({
+            error:
+              "This account has been suspended or deactivated.",
+          });
+      }
+
+      if (
+        !user.password_hash ||
+        !verifyPassword(
+          password,
+          user.password_hash,
+        )
+      ) {
+        return res
+          .status(401)
+          .json({
+            error:
+              "Incorrect password.",
+          });
+      }
+
+      const token =
+        createToken(user);
+
+      const tokenHash =
+        crypto
+          .createHash(
+            "sha256",
+          )
+          .update(
+            token +
+              crypto.randomUUID(),
+          )
+          .digest("hex");
+
+      /*
+       * IMPORTANT:
+       * There is NO
+       * ON CONFLICT(refresh_token_hash)
+       * here.
+       */
       await query(
         `
-        SELECT
-          u.id,
-          u.username,
-          u.display_name,
-          u.email,
-          u.password_hash,
-          u.status,
-          p.title,
-          p.level,
-          p.xp,
-          p.coins,
-          p.profile_image_url
-        FROM users u
-        LEFT JOIN user_profiles p
-          ON p.user_id = u.id
-        WHERE (
-          LOWER(u.email) = $1
-          OR LOWER(u.username) = $1
+        INSERT INTO auth_sessions (
+          user_id,
+          session_token,
+          refresh_token_hash,
+          ip_address,
+          user_agent,
+          expires_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          now() + interval '30 days'
         )
         `,
-        [identity],
+        [
+          user.id,
+          token,
+          tokenHash,
+          req.ip ||
+            null,
+          req.header(
+            "user-agent",
+          ) || null,
+        ],
       );
 
-    if (!userRes.rowCount) {
-      return res.status(401).json({
-        error:
-          "We could not find an account with that username or email.",
-      });
+      return res
+        .status(200)
+        .json({
+          message:
+            `Welcome back, ${user.username}.`,
+          token,
+          user: {
+            id: user.id,
+            username:
+              user.username,
+            displayName:
+              user.display_name,
+            email:
+              user.email,
+            level:
+              user.level || 1,
+            xp: Number(
+              user.xp || 0,
+            ),
+            coins: Number(
+              user.coins || 0,
+            ),
+            profilePhoto:
+              user.profile_image_url ||
+              "",
+          },
+        });
+    } catch (err) {
+      console.error(
+        "Error in login:",
+        err,
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            "Login failed. Please try again.",
+        });
     }
-
-    const user =
-      userRes.rows[0];
-
-    if (user.status !== "ACTIVE") {
-      return res.status(403).json({
-        error:
-          "This account has been suspended or deactivated.",
-      });
-    }
-
-    if (
-      !user.password_hash ||
-      !verifyPassword(
-        password,
-        user.password_hash,
-      )
-    ) {
-      return res.status(401).json({
-        error:
-          "Incorrect password.",
-      });
-    }
-
-    const token =
-      createToken(user);
-
-    const tokenHash =
-      crypto
-        .createHash("sha256")
-        .update(
-          token +
-            crypto.randomUUID(),
-        )
-        .digest("hex");
-
-    /*
-     * IMPORTANT:
-     * No ON CONFLICT(refresh_token_hash) here.
-     */
-    await query(
-      `
-      INSERT INTO auth_sessions (
-        user_id,
-        session_token,
-        refresh_token_hash,
-        ip_address,
-        user_agent,
-        expires_at
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        now() + interval '30 days'
-      )
-      `,
-      [
-        user.id,
-        token,
-        tokenHash,
-        req.ip || null,
-        req.header("user-agent") || null,
-      ],
-    );
-
-    return res.status(200).json({
-      message:
-        `Welcome back, ${user.username}.`,
-      token,
-      user: {
-        id: user.id,
-        username:
-          user.username,
-        displayName:
-          user.display_name,
-        email: user.email,
-        level:
-          user.level || 1,
-        xp: Number(
-          user.xp || 0,
-        ),
-        coins: Number(
-          user.coins || 0,
-        ),
-        profilePhoto:
-          user.profile_image_url ||
-          "",
-      },
-    });
-  } catch (err) {
-    console.error(
-      "Error in login:",
-      err,
-    );
-
-    return res.status(500).json({
-      error:
-        "Login failed. Please try again.",
-    });
-  }
-});
+  },
+);
 
 
 /* =========================================================
@@ -1249,7 +1529,8 @@ router.post(
   async (req, res) => {
     try {
       const authHeader =
-        req.headers.authorization ||
+        req.headers
+          .authorization ||
         "";
 
       const match =
@@ -1277,7 +1558,9 @@ router.post(
             ],
           );
 
-        if (up.rowCount === 0) {
+        if (
+          up.rowCount === 0
+        ) {
           await query(
             `
             INSERT INTO auth_sessions (
@@ -1299,21 +1582,25 @@ router.post(
         }
       }
 
-      return res.status(200).json({
-        ok: true,
-        message:
-          "Logged out successfully.",
-      });
+      return res
+        .status(200)
+        .json({
+          ok: true,
+          message:
+            "Logged out successfully.",
+        });
     } catch (err) {
       console.error(
         "Error in logout:",
         err,
       );
 
-      return res.status(500).json({
-        error:
-          "Logout failed.",
-      });
+      return res
+        .status(500)
+        .json({
+          error:
+            "Logout failed.",
+        });
     }
   },
 );
@@ -1377,111 +1664,122 @@ router.get(
           [req.userId],
         );
 
-      if (!result.rowCount) {
-        return res.status(404).json({
-          error:
-            "User profile not found.",
-        });
+      if (
+        !result.rowCount
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              "User profile not found.",
+          });
       }
 
       const row =
         result.rows[0];
 
-      return res.status(200).json({
-        user: {
-          id: row.id,
-          username:
-            row.username,
-          name:
-            row.display_name,
-          email:
-            row.email,
-          title:
-            row.title,
-          level:
-            row.level,
-          xp: Number(
-            row.xp,
-          ),
-          coins: Number(
-            row.coins,
-          ),
-          friendCode:
-            row.friend_code,
-          coachAvatar:
-            row.coach_avatar,
-          coachPersonality:
-            row.coach_personality,
-          birthDate:
-            row.birth_date,
-          age:
-            row.age,
-          gender:
-            row.gender,
-          contact:
-            row.contact_number,
-          profilePhoto:
-            row.profile_image_url ||
-            "",
-          streak:
-            row.streak || 0,
-          longestStreak:
-            row.longest_streak ||
-            0,
-        },
+      return res
+        .status(200)
+        .json({
+          user: {
+            id: row.id,
+            username:
+              row.username,
+            name:
+              row.display_name,
+            email:
+              row.email,
+            title:
+              row.title,
+            level:
+              row.level,
+            xp: Number(
+              row.xp,
+            ),
+            coins: Number(
+              row.coins,
+            ),
+            friendCode:
+              row.friend_code,
+            coachAvatar:
+              row.coach_avatar,
+            coachPersonality:
+              row.coach_personality,
+            birthDate:
+              row.birth_date,
+            age:
+              row.age,
+            gender:
+              row.gender,
+            contact:
+              row.contact_number,
+            profilePhoto:
+              row.profile_image_url ||
+              "",
+            streak:
+              row.streak ||
+              0,
+            longestStreak:
+              row.longest_streak ||
+              0,
+          },
 
-        stats: {
-          Intelligence:
-            row.intelligence,
-          Strength:
-            row.strength,
-          Vitality:
-            row.vitality,
-          Discipline:
-            row.discipline,
-          Agility:
-            row.agility,
-          Charisma:
-            row.charisma,
-          Wealth:
-            row.wealth,
-        },
+          stats: {
+            Intelligence:
+              row.intelligence,
+            Strength:
+              row.strength,
+            Vitality:
+              row.vitality,
+            Discipline:
+              row.discipline,
+            Agility:
+              row.agility,
+            Charisma:
+              row.charisma,
+            Wealth:
+              row.wealth,
+          },
 
-        settings: {
-          theme:
-            row.theme ||
-            "dark",
-          sounds:
-            row.sounds !== false,
-          animations:
-            row.animations !== false,
-          timeFormat:
-            row.time_format ||
-            "12h",
-          weekStart:
-            row.week_start ||
-            "Monday",
-          difficulty:
-            row.difficulty ||
-            "Adaptive",
-          profileVisible:
-            row.profile_visible !==
-            false,
-          leaderboardVisible:
-            row.leaderboard_visible !==
-            false,
-        },
-      });
+          settings: {
+            theme:
+              row.theme ||
+              "dark",
+            sounds:
+              row.sounds !==
+              false,
+            animations:
+              row.animations !==
+              false,
+            timeFormat:
+              row.time_format ||
+              "12h",
+            weekStart:
+              row.week_start ||
+              "Monday",
+            difficulty:
+              row.difficulty ||
+              "Adaptive",
+            profileVisible:
+              row.profile_visible !==
+              false,
+            leaderboardVisible:
+              row.leaderboard_visible !==
+              false,
+          },
+        });
     } catch (err) {
       console.error(
         "Error in /me:",
         err,
       );
 
-      return res.status(500).json({
-        error:
-          "Failed to retrieve authenticated user.",
-      });
+      return res
+        .status(500)
+        .json({
+          error:
+            "Failed to retrieve authenticated user.",
+        });
     }
   },
 );
@@ -1499,14 +1797,16 @@ router.delete(
       const password =
         String(
           req.body?.password ||
-          "",
+            "",
         );
 
       if (!password) {
-        return res.status(400).json({
-          error:
-            "Password confirmation is required to delete your account.",
-        });
+        return res
+          .status(400)
+          .json({
+            error:
+              "Password confirmation is required to delete your account.",
+          });
       }
 
       const userRes =
@@ -1519,11 +1819,15 @@ router.delete(
           [req.userId],
         );
 
-      if (!userRes.rowCount) {
-        return res.status(404).json({
-          error:
-            "Account not found.",
-        });
+      if (
+        !userRes.rowCount
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              "Account not found.",
+          });
       }
 
       const isValid =
@@ -1534,14 +1838,18 @@ router.delete(
         );
 
       if (!isValid) {
-        return res.status(401).json({
-          error:
-            "Incorrect password. Account deletion aborted.",
-        });
+        return res
+          .status(401)
+          .json({
+            error:
+              "Incorrect password. Account deletion aborted.",
+          });
       }
 
       await tx(
-        async (client) => {
+        async (
+          client,
+        ) => {
           await client.query(
             `
             DELETE FROM auth_sessions
@@ -1560,21 +1868,25 @@ router.delete(
         },
       );
 
-      return res.status(200).json({
-        ok: true,
-        message:
-          "Your LIFE RPG account has been completely deleted.",
-      });
+      return res
+        .status(200)
+        .json({
+          ok: true,
+          message:
+            "Your LIFE RPG account has been completely deleted.",
+        });
     } catch (err) {
       console.error(
         "Error deleting account:",
         err,
       );
 
-      return res.status(500).json({
-        error:
-          "Failed to delete account. Please try again.",
-      });
+      return res
+        .status(500)
+        .json({
+          error:
+            "Failed to delete account. Please try again.",
+        });
     }
   },
 );
