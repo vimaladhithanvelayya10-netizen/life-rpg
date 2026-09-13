@@ -1,6 +1,4 @@
-import dns from 'node:dns';
-
-dns.setDefaultResultOrder('ipv4first');
+import { promises as dnsPromises } from "node:dns";
 
 import express from "express";
 import crypto from "node:crypto";
@@ -30,17 +28,21 @@ const maxOtpAttempts = 5;
 let mailTransporter = null;
 let mailConfigError = null;
 
-const getMailTransporter = () => {
+const getMailTransporter = async () => {
   if (mailTransporter || mailConfigError) return mailTransporter;
 
   const user = String(
     process.env.SMTP_USER || process.env.GMAIL_USER || "",
   ).trim();
+
   const pass = String(
     process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || "",
   ).replace(/\s+/g, "");
+
   const host = String(process.env.SMTP_HOST || "smtp.gmail.com").trim();
+
   const port = Number(process.env.SMTP_PORT || 465);
+
   const secure =
     String(process.env.SMTP_SECURE ?? port === 465).toLowerCase() === "true";
 
@@ -51,26 +53,42 @@ const getMailTransporter = () => {
   }
 
   try {
+    // Resolve only IPv4 addresses so Railway does not attempt
+    // to connect to Gmail over unreachable IPv6.
+    const ipv4Addresses = await dnsPromises.resolve4(host);
+    const ipv4Host = ipv4Addresses[0];
+
+    if (!ipv4Host) {
+      throw new Error(`No IPv4 address found for SMTP host ${host}`);
+    }
+
     mailTransporter = nodemailer.createTransport({
-      host,
+      host: ipv4Host,
       port,
       secure,
-      family: 4,
       auth: { user, pass },
-      tls: { minVersion: "TLSv1.2" },
+      tls: {
+        servername: host,
+        minVersion: "TLSv1.2",
+      },
     });
+
     return mailTransporter;
   } catch (err) {
     mailConfigError = err.message;
+    console.error("SMTP transporter setup failed:", err.message);
     return null;
   }
 };
 
 const sendOtpEmail = async (email, otp) => {
-  const transporter = getMailTransporter();
+  const transporter = await getMailTransporter();
   if (!transporter) return false;
 
-  const user = String(process.env.SMTP_USER || process.env.GMAIL_USER).trim();
+  const user = String(
+    process.env.SMTP_USER || process.env.GMAIL_USER || "",
+  ).trim();
+
   const from = String(process.env.MAIL_FROM || `LIFE RPG <${user}>`).trim();
 
   const html = `
@@ -79,11 +97,15 @@ const sendOtpEmail = async (email, otp) => {
         <div style="font-size:12px;font-weight:800;letter-spacing:3px;color:#ffd777;text-transform:uppercase">LIFE RPG</div>
         <h1 style="font-size:30px;line-height:1.2;margin:16px 0 8px;color:#ffffff">Verify your email.</h1>
         <p style="font-size:15px;line-height:1.6;color:#cbd4e3;margin:0 0 22px">Use the verification code below to continue creating your LIFE RPG account.</p>
+
         <div style="background:#1b2534;border:1px solid #344258;border-radius:16px;padding:20px;text-align:center">
           <div style="font-size:12px;letter-spacing:2px;color:#9eacc2;text-transform:uppercase;margin-bottom:8px">Your code</div>
           <div style="font-size:42px;letter-spacing:12px;font-weight:900;color:#ffd777;padding-left:12px">${otp}</div>
         </div>
-        <p style="font-size:13px;line-height:1.6;color:#9eacc2;margin:20px 0 0">This code expires in 10 minutes. If you did not request this email, you can ignore it.</p>
+
+        <p style="font-size:13px;line-height:1.6;color:#9eacc2;margin:20px 0 0">
+          This code expires in 10 minutes. If you did not request this email, you can ignore it.
+        </p>
       </div>
     </div>`;
 
@@ -95,9 +117,9 @@ const sendOtpEmail = async (email, otp) => {
     text: `Your LIFE RPG verification code is ${otp}. It expires in 10 minutes.`,
     html,
   });
+
   return true;
 };
-
 // POST /api/auth/send-otp
 router.post("/send-otp", async (req, res) => {
   try {
@@ -114,11 +136,9 @@ router.post("/send-otp", async (req, res) => {
       [email],
     );
     if (existing.rowCount > 0) {
-      return res
-        .status(409)
-        .json({
-          error: "An account with this email already exists. Please log in.",
-        });
+      return res.status(409).json({
+        error: "An account with this email already exists. Please log in.",
+      });
     }
 
     // Check resend cooldown
@@ -136,11 +156,9 @@ router.post("/send-otp", async (req, res) => {
       const elapsed = Date.now() - lastSent;
       if (elapsed < otpResendMs) {
         const wait = Math.ceil((otpResendMs - elapsed) / 1000);
-        return res
-          .status(429)
-          .json({
-            error: `Please wait ${wait} seconds before requesting another code.`,
-          });
+        return res.status(429).json({
+          error: `Please wait ${wait} seconds before requesting another code.`,
+        });
       }
     }
 
@@ -227,11 +245,9 @@ router.post("/verify-otp", async (req, res) => {
         [record.id],
       );
       const remaining = Math.max(0, maxOtpAttempts - (record.attempts + 1));
-      return res
-        .status(400)
-        .json({
-          error: `Invalid verification code. ${remaining} attempts remaining.`,
-        });
+      return res.status(400).json({
+        error: `Invalid verification code. ${remaining} attempts remaining.`,
+      });
     }
 
     const onboardingToken = crypto.randomBytes(32).toString("hex");
@@ -362,12 +378,10 @@ router.post("/create-account", async (req, res) => {
     );
 
     if (!tokenRecord.rowCount) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Verification session invalid or expired. Please verify your email again.",
-        });
+      return res.status(400).json({
+        error:
+          "Verification session invalid or expired. Please verify your email again.",
+      });
     }
 
     // Save profile photo if provided
@@ -596,11 +610,9 @@ router.post("/login", async (req, res) => {
     );
 
     if (!userRes.rowCount) {
-      return res
-        .status(401)
-        .json({
-          error: "We could not find an account with that username or email.",
-        });
+      return res.status(401).json({
+        error: "We could not find an account with that username or email.",
+      });
     }
 
     const user = userRes.rows[0];
@@ -774,11 +786,9 @@ router.delete("/account", requireAuth, async (req, res) => {
   try {
     const password = String(req.body?.password || "");
     if (!password) {
-      return res
-        .status(400)
-        .json({
-          error: "Password confirmation is required to delete your account.",
-        });
+      return res.status(400).json({
+        error: "Password confirmation is required to delete your account.",
+      });
     }
 
     const userRes = await query(
@@ -806,12 +816,10 @@ router.delete("/account", requireAuth, async (req, res) => {
       await client.query(`DELETE FROM users WHERE id = $1::uuid`, [req.userId]);
     });
 
-    return res
-      .status(200)
-      .json({
-        ok: true,
-        message: "Your LIFE RPG account has been completely deleted.",
-      });
+    return res.status(200).json({
+      ok: true,
+      message: "Your LIFE RPG account has been completely deleted.",
+    });
   } catch (err) {
     console.error("Error deleting account:", err);
     return res
