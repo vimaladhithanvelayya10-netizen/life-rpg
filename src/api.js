@@ -1,4 +1,19 @@
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+function getBaseApiUrl() {
+  let url = (import.meta.env.VITE_API_URL || '').trim();
+  if (!url) {
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      return '/api';
+    }
+    return 'https://practical-miracle-production-003d.up.railway.app/api';
+  }
+  url = url.replace(/\/+$/, '');
+  if (!url.endsWith('/api') && !url.includes('/api/')) {
+    url += '/api';
+  }
+  return url;
+}
+
+const API_URL = getBaseApiUrl();
 
 export function getToken() {
   return localStorage.getItem('lifeRpgToken') || sessionStorage.getItem('lifeRpgToken') || null;
@@ -32,32 +47,60 @@ export async function apiRequest(path, options = {}) {
     ...(options.headers || {})
   };
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers
-  });
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
 
-  const text = await res.text();
-  let body = null;
+  let res;
   try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = { raw: text };
+    res = await fetch(`${API_URL}${cleanPath}`, {
+      ...options,
+      headers
+    });
+  } catch (networkErr) {
+    throw new Error('Unable to connect to the server. Please check your internet connection.');
+  }
+
+  const contentType = res.headers.get('content-type') || '';
+  let body = null;
+  if (contentType.includes('application/json')) {
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+  } else {
+    try {
+      const text = await res.text();
+      body = { raw: text };
+    } catch {
+      body = null;
+    }
   }
 
   if (res.status === 401) {
     // If not on an auth page, redirect to page1.html
     clearToken();
-    if (!window.location.pathname.includes('page1.html') &&
+    if (typeof window !== 'undefined' &&
+        !window.location.pathname.includes('page1.html') &&
         !window.location.pathname.includes('page2.html') &&
         !window.location.pathname.includes('page3.html')) {
       window.location.href = '/page1.html';
     }
-    throw new Error(body?.error || 'Authentication required');
+    const msg = (body && typeof body === 'object' && body.error)
+      ? body.error
+      : 'Authentication required. Please log in again.';
+    throw new Error(msg);
   }
 
   if (!res.ok) {
-    throw new Error(body?.error || `API request failed (${res.status})`);
+    let errorMsg = '';
+    if (body && typeof body === 'object' && body.error) {
+      errorMsg = body.error;
+    } else if (!contentType.includes('application/json')) {
+      errorMsg = 'Server returned an unexpected response. Please try again.';
+    } else {
+      errorMsg = `API request failed (${res.status})`;
+    }
+    throw new Error(errorMsg);
   }
 
   return body;
@@ -67,6 +110,9 @@ export const apiGet = path => apiRequest(path);
 export const apiPost = (path, body) => apiRequest(path, { method: 'POST', body: JSON.stringify(body) });
 export const apiPut = (path, body) => apiRequest(path, { method: 'PUT', body: JSON.stringify(body) });
 export const apiPatch = (path, body) => apiRequest(path, { method: 'PATCH', body: JSON.stringify(body) });
-export const apiDelete = (path) => apiRequest(path, { method: 'DELETE' });
+export const apiDelete = (path, body) => apiRequest(path, {
+  method: 'DELETE',
+  ...(body !== undefined ? { body: JSON.stringify(body) } : {})
+});
 
 export { API_URL };

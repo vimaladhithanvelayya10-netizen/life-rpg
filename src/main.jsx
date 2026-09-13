@@ -13,7 +13,7 @@ import {
   LogOut
 } from "lucide-react";
 import "./styles.css";
-import { apiGet, apiPut, apiPatch, apiPost, getToken, clearToken, isAuthenticated } from "./api.js";
+import { apiGet, apiPut, apiPatch, apiPost, apiDelete, getToken, clearToken, isAuthenticated } from "./api.js";
 
 const LS = "lifeRpgCompleteUI";
 
@@ -914,18 +914,7 @@ function SettingsPage({data,setData,doToast,handleLogout}){
     setDeleteLoading(true);
     setDeleteError("");
     try {
-      await apiPost('/auth/account', { password: deletePassword }, { method: 'DELETE' }).catch(async () => {
-        // Fallback to fetch directly if apiPost does not support DELETE method override
-        const token = getToken();
-        const res = await fetch('/api/auth/account', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ password: deletePassword })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || 'Failed to delete account.');
-        return data;
-      });
+      await apiDelete('/auth/account', { password: deletePassword });
       clearToken();
       localStorage.removeItem(LS);
       alert("Your account has been deleted permanently.");

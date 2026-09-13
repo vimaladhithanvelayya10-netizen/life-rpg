@@ -30,10 +30,6 @@ const maxOtpAttempts = 5;
 
    Optional:
    RESEND_REPLY_TO
-
-   Testing variables:
-   RESEND_TEST_MODE=true
-   RESEND_TEST_RECIPIENT=your-resend-account-email
    ========================================================= */
 
 const sendOtpEmail = async (email, otp) => {
@@ -42,63 +38,31 @@ const sendOtpEmail = async (email, otp) => {
   ).trim();
 
   const from = String(
-    process.env.RESEND_FROM ||
-      "LIFE RPG <onboarding@resend.dev>",
+    process.env.RESEND_FROM || "",
   ).trim();
 
   const replyTo = String(
     process.env.RESEND_REPLY_TO || "",
   ).trim();
 
-  /*
-   * Resend test accounts can only send testing emails
-   * to the email address belonging to the Resend account.
-   *
-   * Enable this ONLY while testing:
-   *
-   * RESEND_TEST_MODE=true
-   * RESEND_TEST_RECIPIENT=your-resend-account-email
-   */
-  const testMode = [
-    "1",
-    "true",
-    "yes",
-  ].includes(
-    String(
-      process.env.RESEND_TEST_MODE || "",
-    )
-      .trim()
-      .toLowerCase(),
-  );
-
-  const testRecipient = String(
-    process.env.RESEND_TEST_RECIPIENT || "",
-  )
-    .trim()
-    .toLowerCase();
-
-  const recipient = testMode
-    ? testRecipient
-    : email;
-
   if (!apiKey) {
     console.error(
       "RESEND_API_KEY is not configured.",
     );
-    return false;
+    return {
+      success: false,
+      error: "RESEND_API_KEY is not configured on the server.",
+    };
   }
 
-  if (testMode && !testRecipient) {
+  if (!from) {
     console.error(
-      "RESEND_TEST_MODE is enabled but RESEND_TEST_RECIPIENT is missing.",
+      "RESEND_FROM is not configured.",
     );
-    return false;
-  }
-
-  if (testMode) {
-    console.log(
-      `RESEND_TEST_MODE enabled. OTP will be delivered to ${testRecipient} instead of ${email}.`,
-    );
+    return {
+      success: false,
+      error: "RESEND_FROM is not configured. Please set a verified sender address.",
+    };
   }
 
   const html = `
@@ -161,7 +125,7 @@ const sendOtpEmail = async (email, otp) => {
 
         body: JSON.stringify({
           from,
-          to: [recipient],
+          to: [email],
           subject: `${otp} — Your LIFE RPG verification code`,
           text,
           html,
@@ -200,14 +164,22 @@ const sendOtpEmail = async (email, otp) => {
         },
       );
 
-      return false;
+      const errorMessage =
+        data?.message ||
+        (typeof data?.error === "string" ? data.error : "") ||
+        "Failed to send verification email via email service.";
+
+      return {
+        success: false,
+        error: errorMessage,
+      };
     }
 
     console.log(
-      `OTP email sent successfully through Resend to ${recipient}.`,
+      `OTP email sent successfully through Resend to ${email}.`,
     );
 
-    return true;
+    return { success: true };
   } catch (error) {
     if (
       error?.name ===
@@ -216,14 +188,20 @@ const sendOtpEmail = async (email, otp) => {
       console.error(
         "Resend email request timed out.",
       );
+      return {
+        success: false,
+        error: "Email delivery timed out. Please try again.",
+      };
     } else {
       console.error(
         "Resend email request failed:",
         error.message,
       );
+      return {
+        success: false,
+        error: error.message || "Failed to send verification email.",
+      };
     }
-
-    return false;
   } finally {
     clearTimeout(timeout);
   }
@@ -356,10 +334,10 @@ router.post(
         ],
       );
 
-      let sent = false;
+      let mailResult = { success: false, error: "Failed to send verification email." };
 
       try {
-        sent =
+        mailResult =
           await sendOtpEmail(
             email,
             otp,
@@ -369,13 +347,22 @@ router.post(
           "Failed to send verification email:",
           mailErr.message,
         );
+        mailResult = {
+          success: false,
+          error: mailErr.message,
+        };
       }
 
-      if (!sent) {
+      if (!mailResult.success) {
+        const isConfigError =
+          mailResult.error?.includes("RESEND_FROM") ||
+          mailResult.error?.includes("RESEND_API_KEY");
+
         return res
-          .status(502)
+          .status(isConfigError ? 500 : 502)
           .json({
             error:
+              mailResult.error ||
               "Unable to send verification email. Please check your address or try again later.",
           });
       }
@@ -1850,6 +1837,14 @@ router.delete(
         async (
           client,
         ) => {
+          await client.query(
+            `
+            DELETE FROM reward_redemptions
+            WHERE user_id = $1::uuid
+            `,
+            [req.userId],
+          ).catch(() => {});
+
           await client.query(
             `
             DELETE FROM auth_sessions

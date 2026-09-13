@@ -77,10 +77,22 @@ document.getElementById('loginForm').addEventListener('submit',async(e)=>{
   const identity=document.getElementById('identity').value.trim();
   const password=document.getElementById('password').value;
   if(!identity||!password){alert('Enter your username/email and password.');return;}
+  const API_BASE = (window.API_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'https://practical-miracle-production-003d.up.railway.app')).replace(/\/+$/, '');
   try{
-    const r=await fetch('https://practical-miracle-production-003d.up.railway.app/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identity,password})});
-    const data=await r.json();
-    if(!r.ok) throw new Error(data.error||'Login failed.');
+    const r = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identity, password })
+    });
+    const contentType = r.headers.get('content-type') || '';
+    let data = {};
+    if (contentType.includes('application/json')) {
+      try { data = await r.json(); } catch {}
+    }
+    if(!r.ok) {
+      const msg = data?.error || (!contentType.includes('application/json') ? 'Server returned an unexpected response. Please try again.' : 'Login failed.');
+      throw new Error(msg);
+    }
     localStorage.setItem('lifeRpgToken',data.token||'');
     localStorage.setItem('lifeRpgUsername',data.user?.username||'');
     sessionStorage.setItem('lifeRpgToken',data.token||'');

@@ -1,15 +1,34 @@
 (() => {
   const $ = (id) => document.getElementById(id);
-  const API_URL = 'https://practical-miracle-production-003d.up.railway.app';
+  const getApiUrl = () => {
+    if (typeof window !== 'undefined' && window.API_URL) return window.API_URL.replace(/\/+$/, '');
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      return '';
+    }
+    return 'https://practical-miracle-production-003d.up.railway.app';
+  };
+  const API_URL = getApiUrl();
   const postJson = async (url, payload) => {
-    const response = await fetch(`${API_URL}${url}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+    let response;
+    try {
+      response = await fetch(`${API_URL}${cleanUrl}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (networkErr) {
+      throw new Error('Unable to connect to the server. Please check your internet connection.');
+    }
+    const contentType = response.headers.get('content-type') || '';
     let data = {};
-    try { data = await response.json(); } catch {}
-    if (!response.ok) throw new Error(data.error || 'Something went wrong.');
+    if (contentType.includes('application/json')) {
+      try { data = await response.json(); } catch {}
+    }
+    if (!response.ok) {
+      const msg = data?.error || (!contentType.includes('application/json') ? 'Server returned an unexpected response. Please try again.' : 'Something went wrong.');
+      throw new Error(msg);
+    }
     return data;
   };
 
