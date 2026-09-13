@@ -18,22 +18,19 @@ const uploadsDir = path.join(publicDir, "uploads");
 
 const router = express.Router();
 
-const otpTtlMs = 10 * 60 * 1000; // 10 minutes
-const otpResendMs = 30 * 1000; // 30 seconds
+const otpTtlMs = 10 * 60 * 1000;
+const otpResendMs = 30 * 1000;
 const maxOtpAttempts = 5;
 
-/*
- * RESEND EMAIL
- *
- * Required Railway variables:
- *
- * RESEND_API_KEY
- * RESEND_FROM
- *
- * Optional:
- *
- * RESEND_REPLY_TO
- */
+/* =========================================================
+   RESEND EMAIL
+   Required Railway variables:
+   RESEND_API_KEY
+   RESEND_FROM
+
+   Optional:
+   RESEND_REPLY_TO
+   ========================================================= */
 
 const sendOtpEmail = async (email, otp) => {
   const apiKey = String(process.env.RESEND_API_KEY || "").trim();
@@ -68,7 +65,6 @@ const sendOtpEmail = async (email, otp) => {
         </p>
 
         <div style="background:#1b2534;border:1px solid #344258;border-radius:16px;padding:20px;text-align:center">
-
           <div style="font-size:12px;letter-spacing:2px;color:#9eacc2;text-transform:uppercase;margin-bottom:8px">
             Your code
           </div>
@@ -76,7 +72,6 @@ const sendOtpEmail = async (email, otp) => {
           <div style="font-size:42px;letter-spacing:12px;font-weight:900;color:#ffd777;padding-left:12px">
             ${otp}
           </div>
-
         </div>
 
         <p style="font-size:13px;line-height:1.6;color:#9eacc2;margin:20px 0 0">
@@ -92,10 +87,7 @@ const sendOtpEmail = async (email, otp) => {
     `It expires in 10 minutes.`;
 
   const controller = new AbortController();
-
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, 15000);
+  const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
     const response = await fetch("https://api.resend.com/emails", {
@@ -144,7 +136,10 @@ const sendOtpEmail = async (email, otp) => {
     if (error?.name === "AbortError") {
       console.error("Resend email request timed out.");
     } else {
-      console.error("Resend email request failed:", error.message);
+      console.error(
+        "Resend email request failed:",
+        error.message,
+      );
     }
 
     return false;
@@ -154,7 +149,10 @@ const sendOtpEmail = async (email, otp) => {
 };
 
 
-// POST /api/auth/send-otp
+/* =========================================================
+   SEND OTP
+   ========================================================= */
+
 router.post("/send-otp", async (req, res) => {
   try {
     const email = String(req.body?.email || "")
@@ -164,10 +162,11 @@ router.post("/send-otp", async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res
         .status(400)
-        .json({ error: "Enter a valid email address." });
+        .json({
+          error: "Enter a valid email address.",
+        });
     }
 
-    // Check if email already registered
     const existing = await query(
       "SELECT id FROM users WHERE LOWER(email) = $1",
       [email],
@@ -180,7 +179,6 @@ router.post("/send-otp", async (req, res) => {
       });
     }
 
-    // Check resend cooldown
     const recent = await query(
       `
       SELECT created_at
@@ -188,7 +186,7 @@ router.post("/send-otp", async (req, res) => {
       WHERE LOWER(email) = $1
       ORDER BY created_at DESC
       LIMIT 1
-    `,
+      `,
       [email],
     );
 
@@ -204,7 +202,8 @@ router.post("/send-otp", async (req, res) => {
         );
 
         return res.status(429).json({
-          error: `Please wait ${wait} seconds before requesting another code.`,
+          error:
+            `Please wait ${wait} seconds before requesting another code.`,
         });
       }
     }
@@ -237,7 +236,7 @@ router.post("/send-otp", async (req, res) => {
         0,
         false
       )
-    `,
+      `,
       [
         email,
         otp,
@@ -264,27 +263,25 @@ router.post("/send-otp", async (req, res) => {
       });
     }
 
-    return res
-      .status(200)
-      .json({
-        message:
-          "Verification code sent to your email.",
-      });
-
+    return res.status(200).json({
+      message:
+        "Verification code sent to your email.",
+    });
   } catch (err) {
     console.error("Error in send-otp:", err);
 
-    return res
-      .status(500)
-      .json({
-        error:
-          "Failed to generate verification code.",
-      });
+    return res.status(500).json({
+      error:
+        "Failed to generate verification code.",
+    });
   }
 });
 
 
-// POST /api/auth/verify-otp
+/* =========================================================
+   VERIFY OTP
+   ========================================================= */
+
 router.post("/verify-otp", async (req, res) => {
   try {
     const email = String(req.body?.email || "")
@@ -295,12 +292,9 @@ router.post("/verify-otp", async (req, res) => {
       .trim();
 
     if (!email || !otp) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Email and OTP are required.",
-        });
+      return res.status(400).json({
+        error: "Email and OTP are required.",
+      });
     }
 
     const recordRes = await query(
@@ -311,17 +305,15 @@ router.post("/verify-otp", async (req, res) => {
         AND consumed_at IS NULL
       ORDER BY created_at DESC
       LIMIT 1
-    `,
+      `,
       [email],
     );
 
     if (!recordRes.rowCount) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "No verification code was requested for this email.",
-        });
+      return res.status(400).json({
+        error:
+          "No verification code was requested for this email.",
+      });
     }
 
     const record = recordRes.rows[0];
@@ -330,23 +322,19 @@ router.post("/verify-otp", async (req, res) => {
       new Date(record.expires_at).getTime() <
       Date.now()
     ) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "That code has expired. Request a new code.",
-        });
+      return res.status(400).json({
+        error:
+          "That code has expired. Request a new code.",
+      });
     }
 
     if (
       record.attempts >= maxOtpAttempts
     ) {
-      return res
-        .status(429)
-        .json({
-          error:
-            "Too many incorrect attempts. Request a new code.",
-        });
+      return res.status(429).json({
+        error:
+          "Too many incorrect attempts. Request a new code.",
+      });
     }
 
     if (
@@ -358,7 +346,7 @@ router.post("/verify-otp", async (req, res) => {
         UPDATE auth_otps
         SET attempts = attempts + 1
         WHERE id = $1
-      `,
+        `,
         [record.id],
       );
 
@@ -368,12 +356,10 @@ router.post("/verify-otp", async (req, res) => {
           (record.attempts + 1),
       );
 
-      return res
-        .status(400)
-        .json({
-          error:
-            `Invalid verification code. ${remaining} attempts remaining.`,
-        });
+      return res.status(400).json({
+        error:
+          `Invalid verification code. ${remaining} attempts remaining.`,
+      });
     }
 
     const onboardingToken =
@@ -386,39 +372,35 @@ router.post("/verify-otp", async (req, res) => {
         verified = true,
         onboarding_token = $1
       WHERE id = $2
-    `,
+      `,
       [
         onboardingToken,
         record.id,
       ],
     );
 
-    return res
-      .status(200)
-      .json({
-        message:
-          "Email verified.",
-        onboardingToken,
-      });
-
+    return res.status(200).json({
+      message: "Email verified.",
+      onboardingToken,
+    });
   } catch (err) {
     console.error(
       "Error in verify-otp:",
       err,
     );
 
-    return res
-      .status(500)
-      .json({
-        error:
-          "Failed to verify code.",
-      });
+    return res.status(500).json({
+      error:
+        "Failed to verify code.",
+    });
   }
 });
 
 
-// Helper for generating unique username:
-// 4 letters of name + DD + MM (+ optional numerical suffix)
+/* =========================================================
+   USERNAME GENERATOR
+   ========================================================= */
+
 async function generateUniqueUsername(
   client,
   cleanName,
@@ -454,7 +436,7 @@ async function generateUniqueUsername(
         SELECT 1
         FROM users
         WHERE LOWER(username) = LOWER($1)
-      `,
+        `,
         [candidate],
       );
 
@@ -470,11 +452,11 @@ async function generateUniqueUsername(
 }
 
 
-// Generate unique friend code:
-// LRPG-XXXX-XXXX
-async function generateUniqueFriendCode(
-  client,
-) {
+/* =========================================================
+   FRIEND CODE GENERATOR
+   ========================================================= */
+
+async function generateUniqueFriendCode(client) {
   while (true) {
     const part1 =
       crypto
@@ -497,7 +479,7 @@ async function generateUniqueFriendCode(
         SELECT 1
         FROM user_profiles
         WHERE friend_code = $1
-      `,
+        `,
         [code],
       );
 
@@ -508,7 +490,10 @@ async function generateUniqueFriendCode(
 }
 
 
-// POST /api/auth/create-account
+/* =========================================================
+   CREATE ACCOUNT
+   ========================================================= */
+
 router.post("/create-account", async (req, res) => {
   try {
     const {
@@ -545,20 +530,11 @@ router.post("/create-account", async (req, res) => {
     const cleanContact =
       String(contact || "").trim();
 
-    const numAge =
-      Number(age);
+    const numAge = Number(age);
+    const numBirthYear = Number(birthYear);
+    const numBirthDay = Number(birthDay);
+    const numBirthMonth = Number(birthMonth);
 
-    const numBirthYear =
-      Number(birthYear);
-
-    const numBirthDay =
-      Number(birthDay);
-
-    const numBirthMonth =
-      Number(birthMonth);
-
-
-    // Validate inputs
     if (
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
         normalizedEmail,
@@ -625,16 +601,12 @@ router.post("/create-account", async (req, res) => {
       );
     }
 
-    if (
-      passwordValue.length < 8
-    ) {
+    if (passwordValue.length < 8) {
       throw new Error(
         "Password must be at least 8 characters.",
       );
     }
 
-
-    // Verify onboarding token in PostgreSQL
     const tokenRecord =
       await query(
         `
@@ -646,7 +618,7 @@ router.post("/create-account", async (req, res) => {
           AND consumed_at IS NULL
         ORDER BY created_at DESC
         LIMIT 1
-      `,
+        `,
         [
           normalizedEmail,
           onboardingToken,
@@ -654,23 +626,17 @@ router.post("/create-account", async (req, res) => {
       );
 
     if (!tokenRecord.rowCount) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Verification session invalid or expired. Please verify your email again.",
-        });
+      return res.status(400).json({
+        error:
+          "Verification session invalid or expired. Please verify your email again.",
+      });
     }
 
-
-    // Save profile photo if provided
     let savedPhotoUrl = "";
 
     if (profilePhoto?.dataUrl) {
       const match =
-        String(
-          profilePhoto.dataUrl,
-        ).match(
+        String(profilePhoto.dataUrl).match(
           /^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/i,
         );
 
@@ -710,10 +676,7 @@ router.post("/create-account", async (req, res) => {
           ? "jpg"
           : match[1]
               .toLowerCase()
-              .replace(
-                "image/",
-                "",
-              );
+              .replace("image/", "");
 
       const filename =
         `${crypto.randomUUID()}.${ext}`;
@@ -730,19 +693,15 @@ router.post("/create-account", async (req, res) => {
         `/uploads/${filename}`;
     }
 
-
-    // Database transaction to create the complete user entity
     const newUser =
       await tx(async (client) => {
-
-        // Check if email already registered
         const emailCheck =
           await client.query(
             `
             SELECT 1
             FROM users
             WHERE LOWER(email) = $1
-          `,
+            `,
             [normalizedEmail],
           );
 
@@ -751,9 +710,7 @@ router.post("/create-account", async (req, res) => {
             new Error(
               "An account with this email already exists.",
             ),
-            {
-              status: 409,
-            },
+            { status: 409 },
           );
         }
 
@@ -775,8 +732,6 @@ router.post("/create-account", async (req, res) => {
             passwordValue,
           );
 
-
-        // 1. Insert into users
         const userRes =
           await client.query(
             `
@@ -800,7 +755,7 @@ router.post("/create-account", async (req, res) => {
               display_name,
               email,
               created_at
-          `,
+            `,
             [
               username,
               cleanName,
@@ -812,10 +767,6 @@ router.post("/create-account", async (req, res) => {
         const user =
           userRes.rows[0];
 
-
-        // 2. Insert into user_profiles
-        // NEW USER STARTS CLEAN:
-        // Level 1, 0 XP, 0 Coins!
         await client.query(
           `
           INSERT INTO user_profiles (
@@ -854,7 +805,7 @@ router.post("/create-account", async (req, res) => {
             $10,
             $11
           )
-        `,
+          `,
           [
             user.id,
             friendCode,
@@ -870,8 +821,6 @@ router.post("/create-account", async (req, res) => {
           ],
         );
 
-
-        // 3. Insert into user_stats with starter values
         await client.query(
           `
           INSERT INTO user_stats (
@@ -894,12 +843,10 @@ router.post("/create-account", async (req, res) => {
             10,
             10
           )
-        `,
+          `,
           [user.id],
         );
 
-
-        // 4. Insert into user_settings
         await client.query(
           `
           INSERT INTO user_settings (
@@ -930,12 +877,10 @@ router.post("/create-account", async (req, res) => {
             true,
             true
           )
-        `,
+          `,
           [user.id],
         );
 
-
-        // 5. Grant Starter Inventory items
         const starterItems =
           await client.query(`
             SELECT id, code
@@ -948,8 +893,7 @@ router.post("/create-account", async (req, res) => {
           `);
 
         for (
-          const item
-          of starterItems.rows
+          const item of starterItems.rows
         ) {
           await client.query(
             `
@@ -969,7 +913,7 @@ router.post("/create-account", async (req, res) => {
               user_id,
               item_id
             ) DO NOTHING
-          `,
+            `,
             [
               user.id,
               item.id,
@@ -990,7 +934,7 @@ router.post("/create-account", async (req, res) => {
               1,
               'STARTER_PACK'
             )
-          `,
+            `,
             [
               user.id,
               item.id,
@@ -998,14 +942,12 @@ router.post("/create-account", async (req, res) => {
           );
         }
 
-
-        // 6. Consume OTP token
         await client.query(
           `
           UPDATE auth_otps
           SET consumed_at = now()
           WHERE id = $1
-        `,
+          `,
           [
             tokenRecord
               .rows[0]
@@ -1013,8 +955,6 @@ router.post("/create-account", async (req, res) => {
           ],
         );
 
-
-        // 7. Record activity event
         await client.query(
           `
           INSERT INTO activity_events (
@@ -1031,12 +971,10 @@ router.post("/create-account", async (req, res) => {
             '+0 XP',
             'PRIVATE'
           )
-        `,
+          `,
           [user.id],
         );
 
-
-        // 8. Record notification
         await client.query(
           `
           INSERT INTO notifications (
@@ -1049,10 +987,9 @@ router.post("/create-account", async (req, res) => {
             'SYSTEM',
             'Welcome to LIFE RPG. Your journey begins today.'
           )
-        `,
+          `,
           [user.id],
         );
-
 
         return {
           id: user.id,
@@ -1068,7 +1005,6 @@ router.post("/create-account", async (req, res) => {
         };
       });
 
-
     const token =
       createToken(newUser);
 
@@ -1081,8 +1017,12 @@ router.post("/create-account", async (req, res) => {
         )
         .digest("hex");
 
-
-    // Save session in auth_sessions
+    /*
+     * IMPORTANT:
+     * No ON CONFLICT(refresh_token_hash) here.
+     * The database currently does not have a matching
+     * unique/exclusion constraint.
+     */
     await query(
       `
       INSERT INTO auth_sessions (
@@ -1097,17 +1037,13 @@ router.post("/create-account", async (req, res) => {
         $3,
         now() + interval '30 days'
       )
-      ON CONFLICT (
-        refresh_token_hash
-      ) DO NOTHING
-    `,
+      `,
       [
         newUser.id,
         token,
         tokenHash,
       ],
     );
-
 
     return res
       .status(201)
@@ -1117,7 +1053,6 @@ router.post("/create-account", async (req, res) => {
         token,
         user: newUser,
       });
-
   } catch (err) {
     console.error(
       "Error in create-account:",
@@ -1137,8 +1072,10 @@ router.post("/create-account", async (req, res) => {
 });
 
 
-// POST /api/auth/login
-// accepts email OR username + password
+/* =========================================================
+   LOGIN
+   ========================================================= */
+
 router.post("/login", async (req, res) => {
   try {
     const identity =
@@ -1157,19 +1094,12 @@ router.post("/login", async (req, res) => {
         req.body?.password || "",
       );
 
-
-    if (
-      !identity ||
-      !password
-    ) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Username/email and password are required.",
-        });
+    if (!identity || !password) {
+      return res.status(400).json({
+        error:
+          "Username/email and password are required.",
+      });
     }
-
 
     const userRes =
       await query(
@@ -1193,36 +1123,26 @@ router.post("/login", async (req, res) => {
           LOWER(u.email) = $1
           OR LOWER(u.username) = $1
         )
-      `,
+        `,
         [identity],
       );
 
-
     if (!userRes.rowCount) {
-      return res
-        .status(401)
-        .json({
-          error:
-            "We could not find an account with that username or email.",
-        });
+      return res.status(401).json({
+        error:
+          "We could not find an account with that username or email.",
+      });
     }
-
 
     const user =
       userRes.rows[0];
 
-
-    if (
-      user.status !== "ACTIVE"
-    ) {
-      return res
-        .status(403)
-        .json({
-          error:
-            "This account has been suspended or deactivated.",
-        });
+    if (user.status !== "ACTIVE") {
+      return res.status(403).json({
+        error:
+          "This account has been suspended or deactivated.",
+      });
     }
-
 
     if (
       !user.password_hash ||
@@ -1231,14 +1151,11 @@ router.post("/login", async (req, res) => {
         user.password_hash,
       )
     ) {
-      return res
-        .status(401)
-        .json({
-          error:
-            "Incorrect password.",
-        });
+      return res.status(401).json({
+        error:
+          "Incorrect password.",
+      });
     }
-
 
     const token =
       createToken(user);
@@ -1252,8 +1169,10 @@ router.post("/login", async (req, res) => {
         )
         .digest("hex");
 
-
-    // Record session
+    /*
+     * IMPORTANT:
+     * No ON CONFLICT(refresh_token_hash) here.
+     */
     await query(
       `
       INSERT INTO auth_sessions (
@@ -1272,66 +1191,58 @@ router.post("/login", async (req, res) => {
         $5,
         now() + interval '30 days'
       )
-      ON CONFLICT (
-        refresh_token_hash
-      ) DO NOTHING
-    `,
+      `,
       [
         user.id,
         token,
         tokenHash,
         req.ip || null,
-        req.header(
-          "user-agent",
-        ) || null,
+        req.header("user-agent") || null,
       ],
     );
 
-
-    return res
-      .status(200)
-      .json({
-        message:
-          `Welcome back, ${user.username}.`,
-        token,
-        user: {
-          id: user.id,
-          username:
-            user.username,
-          displayName:
-            user.display_name,
-          email: user.email,
-          level:
-            user.level || 1,
-          xp: Number(
-            user.xp || 0,
-          ),
-          coins: Number(
-            user.coins || 0,
-          ),
-          profilePhoto:
-            user.profile_image_url ||
-            "",
-        },
-      });
-
+    return res.status(200).json({
+      message:
+        `Welcome back, ${user.username}.`,
+      token,
+      user: {
+        id: user.id,
+        username:
+          user.username,
+        displayName:
+          user.display_name,
+        email: user.email,
+        level:
+          user.level || 1,
+        xp: Number(
+          user.xp || 0,
+        ),
+        coins: Number(
+          user.coins || 0,
+        ),
+        profilePhoto:
+          user.profile_image_url ||
+          "",
+      },
+    });
   } catch (err) {
     console.error(
       "Error in login:",
       err,
     );
 
-    return res
-      .status(500)
-      .json({
-        error:
-          "Login failed. Please try again.",
-      });
+    return res.status(500).json({
+      error:
+        "Login failed. Please try again.",
+    });
   }
 });
 
 
-// POST /api/auth/logout
+/* =========================================================
+   LOGOUT
+   ========================================================= */
+
 router.post(
   "/logout",
   requireAuth,
@@ -1351,7 +1262,6 @@ router.post(
           ? match[1]
           : null;
 
-
       if (token) {
         const up =
           await query(
@@ -1360,17 +1270,14 @@ router.post(
             SET revoked_at = now()
             WHERE session_token = $1
                OR user_id = $2::uuid
-          `,
+            `,
             [
               token,
               req.userId,
             ],
           );
 
-
-        if (
-          up.rowCount === 0
-        ) {
+        if (up.rowCount === 0) {
           await query(
             `
             INSERT INTO auth_sessions (
@@ -1383,7 +1290,7 @@ router.post(
               $2,
               now()
             )
-          `,
+            `,
             [
               req.userId,
               token,
@@ -1392,33 +1299,30 @@ router.post(
         }
       }
 
-
-      return res
-        .status(200)
-        .json({
-          ok: true,
-          message:
-            "Logged out successfully.",
-        });
-
+      return res.status(200).json({
+        ok: true,
+        message:
+          "Logged out successfully.",
+      });
     } catch (err) {
       console.error(
         "Error in logout:",
         err,
       );
 
-      return res
-        .status(500)
-        .json({
-          error:
-            "Logout failed.",
-        });
+      return res.status(500).json({
+        error:
+          "Logout failed.",
+      });
     }
   },
 );
 
 
-// GET /api/auth/me
+/* =========================================================
+   CURRENT USER
+   ========================================================= */
+
 router.get(
   "/me",
   requireAuth,
@@ -1469,132 +1373,124 @@ router.get(
           LEFT JOIN user_settings st
             ON st.user_id = u.id
           WHERE u.id = $1::uuid
-        `,
+          `,
           [req.userId],
         );
 
-
       if (!result.rowCount) {
-        return res
-          .status(404)
-          .json({
-            error:
-              "User profile not found.",
-          });
+        return res.status(404).json({
+          error:
+            "User profile not found.",
+        });
       }
-
 
       const row =
         result.rows[0];
 
+      return res.status(200).json({
+        user: {
+          id: row.id,
+          username:
+            row.username,
+          name:
+            row.display_name,
+          email:
+            row.email,
+          title:
+            row.title,
+          level:
+            row.level,
+          xp: Number(
+            row.xp,
+          ),
+          coins: Number(
+            row.coins,
+          ),
+          friendCode:
+            row.friend_code,
+          coachAvatar:
+            row.coach_avatar,
+          coachPersonality:
+            row.coach_personality,
+          birthDate:
+            row.birth_date,
+          age:
+            row.age,
+          gender:
+            row.gender,
+          contact:
+            row.contact_number,
+          profilePhoto:
+            row.profile_image_url ||
+            "",
+          streak:
+            row.streak || 0,
+          longestStreak:
+            row.longest_streak ||
+            0,
+        },
 
-      return res
-        .status(200)
-        .json({
-          user: {
-            id: row.id,
-            username:
-              row.username,
-            name:
-              row.display_name,
-            email:
-              row.email,
-            title:
-              row.title,
-            level:
-              row.level,
-            xp: Number(
-              row.xp,
-            ),
-            coins: Number(
-              row.coins,
-            ),
-            friendCode:
-              row.friend_code,
-            coachAvatar:
-              row.coach_avatar,
-            coachPersonality:
-              row.coach_personality,
-            birthDate:
-              row.birth_date,
-            age:
-              row.age,
-            gender:
-              row.gender,
-            contact:
-              row.contact_number,
-            profilePhoto:
-              row.profile_image_url ||
-              "",
-            streak:
-              row.streak || 0,
-            longestStreak:
-              row.longest_streak ||
-              0,
-          },
+        stats: {
+          Intelligence:
+            row.intelligence,
+          Strength:
+            row.strength,
+          Vitality:
+            row.vitality,
+          Discipline:
+            row.discipline,
+          Agility:
+            row.agility,
+          Charisma:
+            row.charisma,
+          Wealth:
+            row.wealth,
+        },
 
-          stats: {
-            Intelligence:
-              row.intelligence,
-            Strength:
-              row.strength,
-            Vitality:
-              row.vitality,
-            Discipline:
-              row.discipline,
-            Agility:
-              row.agility,
-            Charisma:
-              row.charisma,
-            Wealth:
-              row.wealth,
-          },
-
-          settings: {
-            theme:
-              row.theme ||
-              "dark",
-            sounds:
-              row.sounds !== false,
-            animations:
-              row.animations !== false,
-            timeFormat:
-              row.time_format ||
-              "12h",
-            weekStart:
-              row.week_start ||
-              "Monday",
-            difficulty:
-              row.difficulty ||
-              "Adaptive",
-            profileVisible:
-              row.profile_visible !==
-              false,
-            leaderboardVisible:
-              row.leaderboard_visible !==
-              false,
-          },
-        });
-
+        settings: {
+          theme:
+            row.theme ||
+            "dark",
+          sounds:
+            row.sounds !== false,
+          animations:
+            row.animations !== false,
+          timeFormat:
+            row.time_format ||
+            "12h",
+          weekStart:
+            row.week_start ||
+            "Monday",
+          difficulty:
+            row.difficulty ||
+            "Adaptive",
+          profileVisible:
+            row.profile_visible !==
+            false,
+          leaderboardVisible:
+            row.leaderboard_visible !==
+            false,
+        },
+      });
     } catch (err) {
       console.error(
         "Error in /me:",
         err,
       );
 
-      return res
-        .status(500)
-        .json({
-          error:
-            "Failed to retrieve authenticated user.",
-        });
+      return res.status(500).json({
+        error:
+          "Failed to retrieve authenticated user.",
+      });
     }
   },
 );
 
 
-// DELETE /api/auth/account
-// also mounted at /api/account
+/* =========================================================
+   DELETE ACCOUNT
+   ========================================================= */
+
 router.delete(
   "/account",
   requireAuth,
@@ -1603,19 +1499,15 @@ router.delete(
       const password =
         String(
           req.body?.password ||
-            "",
+          "",
         );
 
-
       if (!password) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Password confirmation is required to delete your account.",
-          });
+        return res.status(400).json({
+          error:
+            "Password confirmation is required to delete your account.",
+        });
       }
-
 
       const userRes =
         await query(
@@ -1623,20 +1515,16 @@ router.delete(
           SELECT password_hash
           FROM users
           WHERE id = $1::uuid
-        `,
+          `,
           [req.userId],
         );
 
-
       if (!userRes.rowCount) {
-        return res
-          .status(404)
-          .json({
-            error:
-              "Account not found.",
-          });
+        return res.status(404).json({
+          error:
+            "Account not found.",
+        });
       }
-
 
       const isValid =
         verifyPassword(
@@ -1645,76 +1533,48 @@ router.delete(
             .password_hash,
         );
 
-
       if (!isValid) {
-        return res
-          .status(401)
-          .json({
-            error:
-              "Incorrect password. Account deletion aborted.",
-          });
+        return res.status(401).json({
+          error:
+            "Incorrect password. Account deletion aborted.",
+        });
       }
 
-
-      // Delete user in atomic transaction;
-      // ON DELETE CASCADE cleans all user-owned rows
       await tx(
         async (client) => {
-
-          // 1. Revoke all sessions
           await client.query(
             `
             DELETE FROM auth_sessions
             WHERE user_id = $1::uuid
-          `,
-            [
-              req.userId,
-            ],
+            `,
+            [req.userId],
           );
 
-
-          // 2. Delete user entity
-          // Cascades to:
-          // user_profiles
-          // user_stats
-          // user_settings
-          // quests
-          // quest_runtime
-          // user_inventory
-          // etc.
           await client.query(
             `
             DELETE FROM users
             WHERE id = $1::uuid
-          `,
-            [
-              req.userId,
-            ],
+            `,
+            [req.userId],
           );
         },
       );
 
-
-      return res
-        .status(200)
-        .json({
-          ok: true,
-          message:
-            "Your LIFE RPG account has been completely deleted.",
-        });
-
+      return res.status(200).json({
+        ok: true,
+        message:
+          "Your LIFE RPG account has been completely deleted.",
+      });
     } catch (err) {
       console.error(
         "Error deleting account:",
         err,
       );
 
-      return res
-        .status(500)
-        .json({
-          error:
-            "Failed to delete account. Please try again.",
-        });
+      return res.status(500).json({
+        error:
+          "Failed to delete account. Please try again.",
+      });
     }
   },
 );
